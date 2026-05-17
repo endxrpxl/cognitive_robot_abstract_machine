@@ -205,7 +205,9 @@ def reachable(pose: HomogeneousTransformationMatrix, root: Body, tip: Body) -> b
 
 
 @symbolic_function
-def compute_euclidean_planar_distance(body1: Body, body2: Body, ignore_dimension: Vector3):
+def compute_euclidean_planar_distance(
+    body1: Body, body2: Body, ignore_dimension: Vector3
+):
     """
     Computes the Euclidean distance between two bodies in 2D space, ignoring a specific dimension
     specified by the user. The ignored dimension is set to zero before the distance calculation. This
@@ -236,10 +238,7 @@ def compute_euclidean_planar_distance(body1: Body, body2: Body, ignore_dimension
         body1_position.z = 0.0
         body2_position.z = 0.0
 
-
-    return body1_position.euclidean_distance(
-        body2_position
-    )
+    return body1_position.euclidean_distance(body2_position)
 
 
 @symbolic_function
@@ -255,6 +254,8 @@ def is_supported_by(
     If the intersection is higher than this value, the check returns False due to unhandled clipping.
     :return: True if the second object is supported by the first object, False otherwise
     """
+    if supported_body.id == supporting_body.id:
+        return False
     if Below(
         supported_body.center_of_mass,
         supporting_body.center_of_mass,
@@ -282,6 +283,7 @@ def is_supported_by(
     z_intersection: Interval = intersection[SpatialVariables.z.value]
     size = sum([si.upper - si.lower for si in z_intersection.simple_sets])
     return size < max_intersection_height
+
 
 @symbolic_function
 def is_supporting(supporting_body: Body, max_intersection_height: float = 0.1) -> bool:
