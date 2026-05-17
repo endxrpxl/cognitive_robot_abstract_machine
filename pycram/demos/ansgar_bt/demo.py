@@ -1,5 +1,3 @@
-from pycram.datastructures.enums import Arms
-
 import logging
 from typing import List
 
@@ -11,10 +9,10 @@ from demos.ansgar_bt.helpers.object_helpers import (
 )
 from demos.ansgar_bt.helpers.setup import setup_context
 from pycram.datastructures.dataclasses import Context
+from pycram.datastructures.enums import Arms
 from pycram.motion_executor import ExecutionEnvironment
-from pycram.plans.factories import sequential, execute_single
+from pycram.plans.factories import execute_single
 from pycram.robot_plans.actions.composite.transporting import TransportAction
-from pycram.robot_plans.actions.core.navigation import NavigateAction
 from semantic_digital_twin.reasoning.queries import (
     goal_surface_of_object,
     get_next_object_using_planar_distance,
@@ -34,7 +32,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Scale
 
-logging.getLogger(semantic_digital_twin.world.__name__).setLevel(logging.WARN)
+logging.getLogger(semantic_digital_twin.world.__name__).setLevel(logging.DEBUG)
 
 TABLE_ANNOTATION_NAME = "cooking_table"
 
@@ -71,14 +69,28 @@ class StoringGroceriesDemo:
         table: Table = self._world.get_semantic_annotation_by_name(
             TABLE_ANNOTATION_NAME
         )
-        shelf_layers = self._world.get_semantic_annotations_by_type(ShelfLayer)
+
+        # Using tables as surface as there is an error with the shelf and some different furniture (counterTop)
+        # Predicates fail for those surfaces (not sure why) #TODO if time
+        surface_names = [
+            "desk",
+            "table",
+            "dining_table",
+            "lowerTable",
+        ]
+
+        surfaces = [
+            s
+            for s in world.get_semantic_annotations_by_type(Table)
+            if s.name.name in surface_names
+        ]
 
         objects: List[HasRootBody] = get_next_object_using_planar_distance(
             self._robot_view.bodies[0], table, Vector3(z=1)
         ).tolist()
 
         for obj in objects:
-            surface = goal_surface_of_object(obj, shelf_layers)
+            surface = goal_surface_of_object(obj, surfaces)
             place_pose = placement_pose_on_surface(
                 surface=surface,
                 obj=obj,
@@ -100,18 +112,28 @@ if __name__ == "__main__":
 
     _table: Table = world.get_semantic_annotation_by_name(TABLE_ANNOTATION_NAME)
     _items = {
-        "milk1": (Milk, Scale(0.1, 0.1, 0.2)),
-        "bottle1": (Bottle, Scale(0.1, 0.1, 0.2)),
-        "apple1": (Apple, Scale(0.05, 0.05, 0.05)),
+        "milk": (Milk, Scale(0.1, 0.1, 0.2)),
+        "bottle": (Bottle, Scale(0.1, 0.1, 0.2)),
+        "apple": (Apple, Scale(0.05, 0.05, 0.05)),
     }
     seed_semantic_annotations_on_surface(world=world, surface=_table, items=_items)
     shelf_layers = world.get_semantic_annotations_by_type(ShelfLayer)
-    seed_semantic_annotation_on_surface(
-        world=world,
-        surface=shelf_layers[0],
-        annotation_class=Milk,
-        object_name="milk2",
-        scale=Scale(0.1, 0.1, 0.2),
-    )
+    surfaces = [
+        world.get_semantic_annotation_by_name("desk"),
+        world.get_semantic_annotation_by_name("table"),
+        world.get_semantic_annotation_by_name("dining_table"),
+    ]
+    item_list = list(_items.items())
+    for idx, surface in enumerate(surfaces):
+        # cycle through items if there are fewer items than surfaces
+        item_key, (annotation_class, scale) = item_list[idx % len(item_list)]
+        object_name = f"ref_{item_key}"
+        seed_semantic_annotation_on_surface(
+            world=world,
+            surface=surface,
+            annotation_class=annotation_class,
+            object_name=object_name,
+            scale=scale,
+        )
 
     StoringGroceriesDemo(context=main_context, execution_type=main_execution_type).run()
