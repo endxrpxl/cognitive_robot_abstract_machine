@@ -6,6 +6,7 @@ from demos.ansgar_bt.helpers.object_helpers import (
     placement_pose_on_surface,
     seed_semantic_annotations_on_surface,
     seed_semantic_annotation_on_surface,
+    set_color,
 )
 from demos.ansgar_bt.helpers.setup import setup_context
 from pycram.datastructures.dataclasses import Context
@@ -30,7 +31,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.geometry import Scale
+from semantic_digital_twin.world_description.geometry import Scale, Color
 
 logging.getLogger(semantic_digital_twin.world.__name__).setLevel(logging.DEBUG)
 
@@ -116,8 +117,14 @@ if __name__ == "__main__":
         "bottle": (Bottle, Scale(0.1, 0.1, 0.2)),
         "apple": (Apple, Scale(0.05, 0.05, 0.05)),
     }
-    seed_semantic_annotations_on_surface(world=world, surface=_table, items=_items)
-    shelf_layers = world.get_semantic_annotations_by_type(ShelfLayer)
+
+    spawned_items = seed_semantic_annotations_on_surface(
+        world=world, surface=_table, items=_items
+    )
+
+    # Not used as shelf layers don't work correctly atm, see above in "run"
+    # shelf_layers = world.get_semantic_annotations_by_type(ShelfLayer)
+
     surfaces = [
         world.get_semantic_annotation_by_name("desk"),
         world.get_semantic_annotation_by_name("table"),
@@ -128,12 +135,23 @@ if __name__ == "__main__":
         # cycle through items if there are fewer items than surfaces
         item_key, (annotation_class, scale) = item_list[idx % len(item_list)]
         object_name = f"ref_{item_key}"
-        seed_semantic_annotation_on_surface(
-            world=world,
-            surface=surface,
-            annotation_class=annotation_class,
-            object_name=object_name,
-            scale=scale,
+        spawned_items.append(
+            seed_semantic_annotation_on_surface(
+                world=world,
+                surface=surface,
+                annotation_class=annotation_class,
+                object_name=object_name,
+                scale=scale,
+            )
         )
+
+    for spawned_item in spawned_items:
+        name = spawned_item.name.name
+        if "milk" in name:
+            set_color(semantic_annotation=spawned_item, color=Color.WHITE())
+        elif "bottle" in name:
+            set_color(semantic_annotation=spawned_item, color=Color.BLUE())
+        elif "apple" in name:
+            set_color(semantic_annotation=spawned_item, color=Color.RED())
 
     StoringGroceriesDemo(context=main_context, execution_type=main_execution_type).run()

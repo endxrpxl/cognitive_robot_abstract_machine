@@ -9,7 +9,7 @@ from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix,
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
-from semantic_digital_twin.world_description.geometry import Scale
+from semantic_digital_twin.world_description.geometry import Scale, Color
 
 
 def move_object_to_new_pose(
@@ -128,3 +128,8 @@ def placement_pose_on_surface(
     point.z -= PLACEMENT_Z_OFFSET
 
     return Pose(position=point, reference_frame=point.reference_frame)
+
+
+def set_color(*, semantic_annotation: HasRootBody, color: Color):
+    for shape in semantic_annotation.bodies[0].visual.shapes:
+        shape.color = color
