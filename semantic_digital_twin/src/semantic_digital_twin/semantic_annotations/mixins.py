@@ -749,9 +749,13 @@ class HasSupportingSurface(HasStorageSpace, ABC):
                 supporting_body=self.root,
             )
         )
-        objects = an(entity(
-            semantic_annotation := variable(HasRootBody, domain=self._world.semantic_annotations)
-        ).where(semantic_annotation.root == body)).evaluate()
+        objects = an(
+            entity(
+                semantic_annotation := variable(
+                    HasRootBody, domain=self._world.semantic_annotations
+                )
+            ).where(semantic_annotation.root == body)
+        ).evaluate()
         for obj in objects:
             if obj in self.objects:
                 continue
@@ -1028,3 +1032,10 @@ class HasCaseAsRootBody(HasSupportingSurface, ABC):
         container_event = outer_box.as_composite_set() - inner_box.as_composite_set()
 
         return container_event
+
+
+@dataclass(eq=False)
+class Spillable:
+    """
+    A mixin class for semantic annotations that can spill and should be held upright.
+    """
