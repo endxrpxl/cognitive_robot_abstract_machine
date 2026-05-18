@@ -6,12 +6,16 @@ from typing import List
 
 import numpy as np
 
+from demos.ansgar_bt.helpers.object_helpers import (
+    placement_poses_on_surface,
+)
 from krrood.entity_query_language.factories import (
     an,
     entity,
     variable,
     underspecified,
 )
+from pycram.exceptions import ConditionNotSatisfied
 from pycram.locations.locations import CostmapLocation
 from pycram.plans.factories import sequential, execute_single
 from pycram.robot_plans.actions.composite.facing import FaceAtAction
@@ -22,6 +26,10 @@ from pycram.robot_plans.actions.core.placing import PlaceAction
 from pycram.robot_plans.actions.core.robot_body import ParkArmsAction, MoveTorsoAction
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.reasoning.predicates import InsideOf, allclose
+from semantic_digital_twin.semantic_annotations.mixins import (
+    HasSupportingSurface,
+    HasRootBody,
+)
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Drawer
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.world_entity import Body
@@ -169,6 +177,48 @@ class TransportAction(ActionDescription):
     ):
         # The validation of each core action is done in the action itself, so no more validation needed here.
         pass
+
+
+@dataclass
+class TransportToSurfaceAction(ActionDescription):
+    """
+    Transports an object to a position on the surface using an arm
+    """
+
+    semantic_annotation: HasRootBody = field(repr=False)
+    """
+    Semantic annotation describing the object that should be transported.
+    """
+
+    target_surface: HasSupportingSurface
+    """
+    Target surface to which the object should be transported
+    """
+
+    arm: Optional[Arms]
+    """
+    Arm that should be used
+    """
+
+    grasp_description: Optional[GraspDescription] = None
+    """
+    Grasp Description that should be used for picking up the object
+    """
+
+    def execute(self) -> None:
+        place_poses = placement_poses_on_surface(
+            surface=self.target_surface,
+            obj=self.semantic_annotation,
+        )
+
+        transport_action = TransportAction(
+            object_designator=self.semantic_annotation.root,
+            grasp_description=self.grasp_description,
+            target_location=place_poses[0],
+            arm=self.arm,
+        )
+        # Return immediately on success (wrapped in execute_single)
+        self.add_subplan(execute_single(transport_action)).perform()
 
 
 @dataclass

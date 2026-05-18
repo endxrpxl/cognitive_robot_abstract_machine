@@ -1,9 +1,7 @@
 import logging
 from typing import List
 
-import semantic_digital_twin
 from demos.ansgar_bt.helpers.object_helpers import (
-    placement_pose_on_surface,
     seed_semantic_annotations_on_surface,
     seed_semantic_annotation_on_surface,
     set_color,
@@ -13,7 +11,9 @@ from pycram.datastructures.dataclasses import Context
 from pycram.datastructures.enums import Arms
 from pycram.motion_executor import ExecutionEnvironment
 from pycram.plans.factories import execute_single
-from pycram.robot_plans.actions.composite.transporting import TransportAction
+from pycram.robot_plans.actions.composite.transporting import (
+    TransportToSurfaceAction,
+)
 from semantic_digital_twin.reasoning.queries import (
     goal_surface_of_object,
     get_next_object_using_planar_distance,
@@ -30,10 +30,9 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 )
 from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.spatial_types.spatial_types import Pose
-from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Scale, Color
 
-logging.getLogger(semantic_digital_twin.world.__name__).setLevel(logging.DEBUG)
+# logging.getLogger(semantic_digital_twin.world.__name__).setLevel(logging.DEBUG)
 
 TABLE_ANNOTATION_NAME = "cooking_table"
 
@@ -86,22 +85,35 @@ class StoringGroceriesDemo:
             if s.name.name in surface_names
         ]
 
+        surfaces += world.get_semantic_annotations_by_type(ShelfLayer)
+
         objects: List[HasRootBody] = get_next_object_using_planar_distance(
             self._robot_view.bodies[0], table, Vector3(z=1)
         ).tolist()
 
         for obj in objects:
             surface = goal_surface_of_object(obj, surfaces)
-            place_pose = placement_pose_on_surface(
-                surface=surface,
-                obj=obj,
-            )
 
             with self._execution_type:
-                execute_single(
-                    TransportAction(obj.root, place_pose, Arms.LEFT),
+                # create the plan node for the transport action
+                plan_node = execute_single(
+                    TransportToSurfaceAction(
+                        semantic_annotation=obj, target_surface=surface, arm=Arms.LEFT
+                    ),
                     context=self._context,
-                ).perform()
+                )
+
+                # show the plan structure on launch (if possible)
+                try:
+                    if hasattr(plan_node, "plan") and plan_node.plan is not None:
+                        plan_node.plan.plot_plan_structure()
+                except Exception as e:  # plotting should not break execution
+                    logging.getLogger(__name__).warning(
+                        "Failed to plot plan structure: %s", e
+                    )
+
+                # perform the plan node afterwards
+                plan_node.perform()
 
             with self._world.modify_world():
                 surface.add_object(obj)
@@ -127,8 +139,8 @@ if __name__ == "__main__":
 
     surfaces = [
         world.get_semantic_annotation_by_name("desk"),
+        world.get_semantic_annotation_by_name("shelf_1"),
         world.get_semantic_annotation_by_name("table"),
-        world.get_semantic_annotation_by_name("dining_table"),
     ]
     item_list = list(_items.items())
     for idx, surface in enumerate(surfaces):
