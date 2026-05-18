@@ -23,6 +23,7 @@ from semantic_digital_twin.semantic_annotations.mixins import (
     IsPerceivable,
     HasRootBody,
     HasStorageSpace,
+    Spillable,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.datastructures.variables import SpatialVariables
@@ -130,6 +131,7 @@ class Handle(HasRootBody):
                 SpatialVariables.z.value: z_interval,
             }
         )
+
 
 @dataclass(eq=False)
 class Dishwasher(HasCaseAsRootBody, HasDoors, HasDrawers):
@@ -396,8 +398,10 @@ class Cabinet(Furniture, HasCaseAsRootBody):
 @dataclass(eq=False)
 class Fridge(Cabinet, HasDoors, HasDrawers): ...
 
+
 @dataclass(eq=False)
 class Oven(HasRootBody): ...
+
 
 @dataclass(eq=False)
 class Dresser(Cabinet, HasDrawers, HasDoors): ...
@@ -554,7 +558,7 @@ class Wall(HasApertures):
 
 
 @dataclass(eq=False)
-class Bottle(HasRootBody):
+class Bottle(HasRootBody, Spillable):
     """
     Abstract class for bottles.
     """
@@ -586,7 +590,7 @@ class MustardBottle(Bottle):
 
 
 @dataclass(eq=False)
-class DrinkingContainer(HasRootBody): ...
+class DrinkingContainer(HasRootBody, Spillable): ...
 
 
 @dataclass(eq=False)
@@ -826,6 +830,7 @@ class Salt(Food):
     """
     A pack or container of salt (e.g., salt shaker or salt can).
     """
+
 
 @dataclass(eq=False)
 class CoffeeTable(Table):
