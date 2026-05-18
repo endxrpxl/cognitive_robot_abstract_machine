@@ -96,24 +96,12 @@ class StoringGroceriesDemo:
 
             with self._execution_type:
                 # create the plan node for the transport action
-                plan_node = execute_single(
+                execute_single(
                     TransportToSurfaceAction(
                         semantic_annotation=obj, target_surface=surface, arm=Arms.LEFT
                     ),
                     context=self._context,
-                )
-
-                # show the plan structure on launch (if possible)
-                try:
-                    if hasattr(plan_node, "plan") and plan_node.plan is not None:
-                        plan_node.plan.plot_plan_structure()
-                except Exception as e:  # plotting should not break execution
-                    logging.getLogger(__name__).warning(
-                        "Failed to plot plan structure: %s", e
-                    )
-
-                # perform the plan node afterwards
-                plan_node.perform()
+                ).perform()
 
             with self._world.modify_world():
                 surface.add_object(obj)
