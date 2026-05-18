@@ -110,11 +110,11 @@ def filter_points_full_on_surface(
     ]
 
 
-def placement_pose_on_surface(
+def placement_poses_on_surface(
     *,
     surface: HasSupportingSurface,
     obj: HasRootBody,
-) -> Pose:
+) -> List[Pose]:
     raw = surface.sample_points_from_surface(obj)
     on_surface = filter_points_full_on_surface(raw, obj, surface)
     candidates = on_surface or raw
@@ -124,10 +124,12 @@ def placement_pose_on_surface(
             f"No placement samples for object {obj!r} on surface {surface!r}"
         )
 
-    point = candidates[0]
-    point.z -= PLACEMENT_Z_OFFSET
+    poses: List[Pose] = []
+    for point in candidates:
+        point.z -= PLACEMENT_Z_OFFSET
+        poses.append(Pose(position=point, reference_frame=point.reference_frame))
 
-    return Pose(position=point, reference_frame=point.reference_frame)
+    return poses
 
 
 def set_color(*, semantic_annotation: HasRootBody, color: Color):
