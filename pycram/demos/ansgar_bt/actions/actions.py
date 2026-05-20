@@ -17,12 +17,12 @@ from semantic_digital_twin.spatial_types import Vector3
 @dataclass
 class FreeSurfaceAction(ActionDescription):
     """
-    Transports an object to a position on the surface using an arm
+    Cleans the surface by transporting all objects that are currently on the surface to their preferred storage location.
     """
 
     surface_to_clean: HasSupportingSurface = field(repr=False)
     """
-    Semantic annotation describing the object that should be transported.
+    Surface to clean
     """
 
     arm: Optional[Arms]
