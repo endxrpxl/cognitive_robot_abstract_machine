@@ -23,7 +23,7 @@ from semantic_digital_twin.semantic_annotations.mixins import (
     IsPerceivable,
     HasRootBody,
     HasStorageSpace,
-    Spillable,
+    IsSpillable,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.datastructures.variables import SpatialVariables
@@ -558,10 +558,12 @@ class Wall(HasApertures):
 
 
 @dataclass(eq=False)
-class Bottle(HasRootBody, Spillable):
+class Bottle(HasRootBody, IsSpillable):
     """
     Abstract class for bottles.
     """
+
+    preferred_storage_location = Cupboard
 
 
 @dataclass(eq=False)
@@ -590,7 +592,7 @@ class MustardBottle(Bottle):
 
 
 @dataclass(eq=False)
-class DrinkingContainer(HasRootBody, Spillable): ...
+class DrinkingContainer(HasRootBody, IsSpillable): ...
 
 
 @dataclass(eq=False)
@@ -743,12 +745,12 @@ class Cereal(Food, IsPerceivable):
 
 
 @dataclass(eq=False)
-class Milk(Food, IsPerceivable):
+class Milk(Food, IsPerceivable, IsSpillable):
     """
     A container of milk.
     """
 
-    ...
+    preferred_storage_location = Fridge
 
 
 @dataclass(eq=False)
@@ -774,6 +776,8 @@ class Fruit(Produce):
     """
     Fruit.
     """
+
+    preferred_storage_location = CounterTop
 
 
 @dataclass(eq=False)
