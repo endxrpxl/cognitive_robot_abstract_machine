@@ -23,12 +23,18 @@ from pycram.robot_plans.actions.core.container import OpenAction
 from pycram.robot_plans.actions.core.navigation import NavigateAction
 from pycram.robot_plans.actions.core.pick_up import PickUpAction
 from pycram.robot_plans.actions.core.placing import PlaceAction
-from pycram.robot_plans.actions.core.robot_body import ParkArmsAction, MoveTorsoAction
+from pycram.robot_plans.actions.core.robot_body import (
+    ParkArmsAction,
+    MoveTorsoAction,
+    CarryAction,
+)
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.reasoning.predicates import InsideOf, allclose
+from semantic_digital_twin.reasoning.queries import preferred_surface_for_object
 from semantic_digital_twin.semantic_annotations.mixins import (
     HasSupportingSurface,
     HasRootBody,
+    IsSpillable,
 )
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Drawer
 from semantic_digital_twin.spatial_types.spatial_types import Pose
@@ -36,7 +42,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import Optional, Any
 
 from pycram.config.action_conf import ActionConfig
-from pycram.datastructures.enums import Arms
+from pycram.datastructures.enums import Arms, AxisIdentifier
 from pycram.datastructures.grasp import GraspDescription, GraspPose
 
 from pycram.plans.failures import ConfigurationNotReached, BodyUnfetchable
@@ -49,9 +55,9 @@ class TransportAction(ActionDescription):
     Transports an object to a position using an arm
     """
 
-    object_designator: Body = field(repr=False)
+    semantic_annotation: HasRootBody = field(repr=False)
     """
-    Object designator_description describing the object that should be transported.
+    Semantic annotation describing the object that should be transported.
     """
 
     target_location: Pose
@@ -68,6 +74,9 @@ class TransportAction(ActionDescription):
     """
     Grasp Description that should be used for picking up the object
     """
+
+    def __post_init__(self):
+        self.object_designator = self.semantic_annotation.root
 
     def inside_container(self) -> List[Body]:
         bodies = []
@@ -126,6 +135,18 @@ class TransportAction(ActionDescription):
         if not pickup_pose:
             raise BodyUnfetchable(self.object_designator, self.arm)
 
+        if isinstance(self.semantic_annotation, IsSpillable):
+            print("Spillable")
+            park_arms = sequential(
+                [
+                    CarryAction(pickup_pose.arm, tip_axis=AxisIdentifier.Z),
+                    ParkArmsAction(1 - pickup_pose.arm),
+                ]
+            )
+            pass
+        else:
+            park_arms = ParkArmsAction(Arms.BOTH)
+
         self.add_subplan(
             sequential(
                 [
@@ -135,7 +156,7 @@ class TransportAction(ActionDescription):
                         pickup_pose.arm,
                         grasp_description=pickup_pose.grasp_description,
                     ),
-                    ParkArmsAction(Arms.BOTH),
+                    park_arms,
                     MoveTorsoAction(TorsoState.HIGH),
                 ]
             )
