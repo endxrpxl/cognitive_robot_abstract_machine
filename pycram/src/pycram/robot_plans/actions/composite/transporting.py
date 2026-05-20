@@ -180,48 +180,6 @@ class TransportAction(ActionDescription):
 
 
 @dataclass
-class TransportToSurfaceAction(ActionDescription):
-    """
-    Transports an object to a position on the surface using an arm
-    """
-
-    semantic_annotation: HasRootBody = field(repr=False)
-    """
-    Semantic annotation describing the object that should be transported.
-    """
-
-    target_surface: HasSupportingSurface
-    """
-    Target surface to which the object should be transported
-    """
-
-    arm: Optional[Arms]
-    """
-    Arm that should be used
-    """
-
-    grasp_description: Optional[GraspDescription] = None
-    """
-    Grasp Description that should be used for picking up the object
-    """
-
-    def execute(self) -> None:
-        place_poses = placement_poses_on_surface(
-            surface=self.target_surface,
-            obj=self.semantic_annotation,
-        )
-
-        transport_action = TransportAction(
-            object_designator=self.semantic_annotation.root,
-            grasp_description=self.grasp_description,
-            target_location=place_poses[0],
-            arm=self.arm,
-        )
-        # Return immediately on success (wrapped in execute_single)
-        self.add_subplan(execute_single(transport_action)).perform()
-
-
-@dataclass
 class PickAndPlaceAction(ActionDescription):
     """
     Transports an object to a position using an arm without moving the base of the robot
