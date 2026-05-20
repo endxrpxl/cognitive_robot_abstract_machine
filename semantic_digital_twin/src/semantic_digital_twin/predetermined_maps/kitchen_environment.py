@@ -340,13 +340,22 @@ class KitchenEnvironment:
                 scale=Scale(x=0.60, y=0.658, z=1.49),
             )
 
+            refrigerator_layer = ShelfLayer.create_with_new_body_in_world(
+                world=world,
+                name=PrefixedName("fridge_layer"),
+                world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=0.537, y=-2.181, z=0.745, yaw=np.pi * 3 / 2
+                ),
+                scale=Scale(x=0.59, y=0.65, z=0.02),
+            )
+
             counterTop = CounterTop.create_with_new_body_in_world(
                 world=world,
                 name=PrefixedName("counterTop"),
                 world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
-                    x=1.859, y=-2.181, z=0.2725
+                    x=1.87, y=-2.181, z=0.2725
                 ),
-                scale=Scale(x=2.044, y=0.658, z=0.545),
+                scale=Scale(x=2, y=0.658, z=0.545),
             )
             for color in counterTop.bodies[0].visual.shapes:
                 color.color = Color.BEIGE()
