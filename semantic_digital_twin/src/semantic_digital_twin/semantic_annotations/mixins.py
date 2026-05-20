@@ -1035,7 +1035,7 @@ class HasCaseAsRootBody(HasSupportingSurface, ABC):
 
 
 @dataclass(eq=False)
-class Spillable:
+class IsSpillable:
     """
     A mixin class for semantic annotations that can spill and should be held upright.
     """
