@@ -6,19 +6,12 @@ from demos.ansgar_bt.helpers.object_helpers import (
 from demos.ansgar_bt.helpers.setup import setup_context
 from pycram.datastructures.enums import Arms
 from pycram.plans.factories import execute_single
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.reasoning.predicates import InsideOf, contact
-from semantic_digital_twin.reasoning.queries import preferred_surface_for_object
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
-    Fridge,
-    ShelfLayer,
-    CounterTop,
     Table,
     Milk,
     Bottle,
     Apple,
 )
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Scale, Color
 
@@ -44,15 +37,9 @@ for spawned_item in spawned_items:
     elif "apple" in name:
         set_color(semantic_annotation=spawned_item, color=Color.RED())
 
-print(spawned_items[0].preferred_storage_location)
-
-
-for spawned_item in spawned_items:
-    pref = preferred_surface_for_object(spawned_item).tolist()
-    print(pref)
-
 ###
 with main_execution_type:
     execute_single(
-        FreeSurfaceAction(surface_to_clean=_table, arm=Arms.LEFT), context=main_context
+        FreeSurfaceAction(surface_to_clean=_table, arm=Arms.LEFT),
+        context=main_context,
     ).perform()

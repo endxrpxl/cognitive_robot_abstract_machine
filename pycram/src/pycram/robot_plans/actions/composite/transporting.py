@@ -5,19 +5,21 @@ from datetime import timedelta
 from typing import List
 
 import numpy as np
+from typing_extensions import Optional, Any
 
-from demos.ansgar_bt.helpers.object_helpers import (
-    placement_poses_on_surface,
-)
 from krrood.entity_query_language.factories import (
     an,
     entity,
     variable,
     underspecified,
 )
-from pycram.exceptions import ConditionNotSatisfied
+from pycram.config.action_conf import ActionConfig
+from pycram.datastructures.enums import Arms, AxisIdentifier
+from pycram.datastructures.grasp import GraspDescription, GraspPose
 from pycram.locations.locations import CostmapLocation
 from pycram.plans.factories import sequential, execute_single
+from pycram.plans.failures import ConfigurationNotReached, BodyUnfetchable
+from pycram.robot_plans.actions.base import ActionDescription
 from pycram.robot_plans.actions.composite.facing import FaceAtAction
 from pycram.robot_plans.actions.core.container import OpenAction
 from pycram.robot_plans.actions.core.navigation import NavigateAction
@@ -29,24 +31,19 @@ from pycram.robot_plans.actions.core.robot_body import (
     CarryAction,
 )
 from semantic_digital_twin.datastructures.definitions import TorsoState
-from semantic_digital_twin.reasoning.predicates import InsideOf, allclose
-from semantic_digital_twin.reasoning.queries import preferred_surface_for_object
+from semantic_digital_twin.reasoning.predicates import InsideOf
+from semantic_digital_twin.reasoning.queries import (
+    storages_with_environment_for_object,
+    sort_surfaces_by_most_similar_objects_to_object,
+)
 from semantic_digital_twin.semantic_annotations.mixins import (
-    HasSupportingSurface,
     HasRootBody,
     IsSpillable,
+    HasSupportingSurface,
 )
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Drawer
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import Optional, Any
-
-from pycram.config.action_conf import ActionConfig
-from pycram.datastructures.enums import Arms, AxisIdentifier
-from pycram.datastructures.grasp import GraspDescription, GraspPose
-
-from pycram.plans.failures import ConfigurationNotReached, BodyUnfetchable
-from pycram.robot_plans.actions.base import ActionDescription
 
 
 @dataclass
@@ -60,14 +57,14 @@ class TransportAction(ActionDescription):
     Semantic annotation describing the object that should be transported.
     """
 
-    target_location: Pose
-    """
-    Target Location to which the object should be transported
-    """
-
     arm: Optional[Arms]
     """
     Arm that should be used
+    """
+
+    target_location: Optional[Pose] = None
+    """
+    Target Location to which the object should be transported
     """
 
     grasp_description: Optional[GraspDescription] = None
@@ -77,6 +74,29 @@ class TransportAction(ActionDescription):
 
     def __post_init__(self):
         self.object_designator = self.semantic_annotation.root
+        if not self.target_location:
+            self.target_location = self.generate_target_location()
+
+    def generate_target_location(self) -> Pose:
+        storages_with_environment = storages_with_environment_for_object(
+            self.semantic_annotation
+        ).tolist()
+        sorted_storages, empty_storages = (
+            sort_surfaces_by_most_similar_objects_to_object(
+                storages_with_environment, self.semantic_annotation
+            )
+        )
+        storages_to_try: List[HasSupportingSurface] = (
+            sorted_storages.tolist() + empty_storages.tolist()
+        )
+        poses_to_try = []
+        for storage in storages_to_try:
+            points = storage.sample_points_from_surface(self.semantic_annotation)
+            for point in points:
+                poses_to_try.append(
+                    Pose(position=point, reference_frame=point.reference_frame)
+                )
+        ...
 
     def inside_container(self) -> List[Body]:
         bodies = []
@@ -192,6 +212,16 @@ class TransportAction(ActionDescription):
             ),
             keep_joint_states=True,
         )
+
+    # @staticmethod
+    # def pre_condition(variables, context: Context, kwargs) -> SymbolicExpression:
+    #     semantic_annotation: HasRootBody = kwargs["semantic_annotation"]
+    #     target_location: Pose = kwargs["target_location"]
+    #     bounding_box = semantic_annotation.as_bounding_box_collection_at_origin(
+    #         origin=target_location.to_homogeneous_matrix()
+    #     ).bounding_box()
+    #     placeable = is_place_occupied(box=bounding_box, world=context.world)
+    #     return placeable
 
     def validate(
         self, result: Optional[Any] = None, max_wait_time: Optional[timedelta] = None
