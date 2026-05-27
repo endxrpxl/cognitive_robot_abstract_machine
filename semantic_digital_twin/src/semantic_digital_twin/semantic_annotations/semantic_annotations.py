@@ -4,12 +4,20 @@ from abc import ABC
 from dataclasses import dataclass, field
 from typing import Iterable, Optional, Self, Tuple
 
-from random_events.interval import closed
-from random_events.product_algebra import SimpleEvent
 from typing_extensions import List, Type
 
 from krrood.ormatic.utils import classproperty
 from krrood.symbolic_math import symbolic_math
+from random_events.interval import closed
+from random_events.product_algebra import SimpleEvent
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.datastructures.variables import SpatialVariables
+from semantic_digital_twin.exceptions import (
+    InvalidPlaneDimensions,
+    InvalidHingeActiveAxis,
+    MissingSemanticAnnotationError,
+)
+from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.semantic_annotations.mixins import (
     HasSupportingSurface,
     HasRootRegion,
@@ -24,15 +32,8 @@ from semantic_digital_twin.semantic_annotations.mixins import (
     HasRootBody,
     HasStorageSpace,
     IsSpillable,
+    StorageEnvironments,
 )
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.datastructures.variables import SpatialVariables
-from semantic_digital_twin.exceptions import (
-    InvalidPlaneDimensions,
-    InvalidHingeActiveAxis,
-    MissingSemanticAnnotationError,
-)
-from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.spatial_types import (
     Point3,
     HomogeneousTransformationMatrix,
@@ -57,6 +58,9 @@ from semantic_digital_twin.world_description.world_entity import (
     Body,
     Region,
     Connection,
+)
+from semantic_digital_twin.world_description.world_modification import (
+    synchronized_attribute_modification,
 )
 
 
@@ -390,13 +394,42 @@ class CounterTop(Furniture, HasSupportingSurface):
 
 @dataclass(eq=False)
 class Cabinet(Furniture, HasCaseAsRootBody):
+
+    @classproperty
+    def infers_storage_environment(self) -> StorageEnvironments:
+        return StorageEnvironments.NORMAL
+
     @classproperty
     def hole_direction(self) -> Vector3:
         return Vector3.NEGATIVE_X()
 
 
 @dataclass(eq=False)
-class Fridge(Cabinet, HasDoors, HasDrawers): ...
+class CabinetWithLayers(Cabinet, ABC):
+
+    _shelf_layers: List[ShelfLayer] = field(default_factory=list)
+
+    @property
+    def shelf_layers(self) -> List[ShelfLayer]:
+        if not self._shelf_layers:
+            self.add_shelf_layers()
+        return self._shelf_layers
+
+    @synchronized_attribute_modification
+    def add_shelf_layers(self) -> None:
+        shelf_layers = self._world.get_semantic_annotations_by_type(ShelfLayer)
+        for shelf_layer in shelf_layers:
+            if InsideOf(shelf_layer.root, self.root).compute_containment_ratio() == 1:
+                self._shelf_layers.append(shelf_layer)
+                shelf_layer.storage_environment = self.infers_storage_environment
+
+
+@dataclass(eq=False)
+class Fridge(CabinetWithLayers, HasDoors, HasDrawers):
+
+    @classproperty
+    def infers_storage_environment(self) -> StorageEnvironments:
+        return StorageEnvironments.COLD
 
 
 @dataclass(eq=False)
@@ -408,7 +441,7 @@ class Dresser(Cabinet, HasDrawers, HasDoors): ...
 
 
 @dataclass(eq=False)
-class Cupboard(Cabinet, HasDoors): ...
+class Cupboard(CabinetWithLayers, HasDoors): ...
 
 
 @dataclass(eq=False)
@@ -558,12 +591,17 @@ class Wall(HasApertures):
 
 
 @dataclass(eq=False)
-class Bottle(HasRootBody, IsSpillable):
+class StorageObject(HasRootBody):
+    @property
+    def preferred_storage_environment(self) -> StorageEnvironments:
+        return StorageEnvironments.NORMAL
+
+
+@dataclass(eq=False)
+class Bottle(StorageObject, IsSpillable):
     """
     Abstract class for bottles.
     """
-
-    preferred_storage_location = Cupboard
 
 
 @dataclass(eq=False)
@@ -661,7 +699,7 @@ class Bowl(HasSupportingSurface, IsPerceivable):
 
 # Food Items
 @dataclass(eq=False)
-class Food(HasRootBody):
+class Food(StorageObject):
     """
     A Group class for Food.
     """
@@ -750,7 +788,9 @@ class Milk(Food, IsPerceivable, IsSpillable):
     A container of milk.
     """
 
-    preferred_storage_location = Fridge
+    @property
+    def preferred_storage_environment(self) -> StorageEnvironments:
+        return StorageEnvironments.COLD
 
 
 @dataclass(eq=False)
@@ -768,16 +808,12 @@ class Produce(Food):
     In American English, produce generally refers to fresh fruits and vegetables intended to be eaten by humans.
     """
 
-    pass
-
 
 @dataclass(eq=False)
 class Fruit(Produce):
     """
     Fruit.
     """
-
-    preferred_storage_location = CounterTop
 
 
 @dataclass(eq=False)

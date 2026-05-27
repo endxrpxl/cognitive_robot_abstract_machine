@@ -1,6 +1,7 @@
-from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
-    VizMarkerPublisher,
-)
+import numpy as np
+
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Room, Floor
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Table,
     Sofa,
@@ -8,39 +9,22 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Fridge,
     CounterTop,
     Wall,
-    Cabinet,
     Cupboard,
-    Door,
-    Desk,
-    Handle,
     ShelfLayer,
-    Hinge,
     Oven,
 )
-from semantic_digital_twin.world import World
-import threading
-import rclpy
-import numpy as np
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.semantic_annotations.semantic_annotations import Room, Floor
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
 )
-from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
+from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     FixedConnection,
-    RevoluteConnection,
 )
-from semantic_digital_twin.world_description.geometry import Box, Scale, Color
 from semantic_digital_twin.world_description.geometry import Cylinder
+from semantic_digital_twin.world_description.geometry import Scale, Color
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
-from semantic_digital_twin.spatial_types.spatial_types import Vector3
-from semantic_digital_twin.world_description.degree_of_freedom import (
-    DegreeOfFreedomLimits,
-    DegreeOfFreedom,
-)
 
 
 class KitchenEnvironment:
@@ -62,7 +46,7 @@ class KitchenEnvironment:
 
         self._build_environment_walls(world)
         self._build_environment_furniture(world)
-        self._build_environment_rooms(world)
+        # self._build_environment_rooms(world)
 
         return world
 
@@ -225,6 +209,7 @@ class KitchenEnvironment:
                 ),
                 scale=Scale(0.40, 0.76, 0.02),
             )
+            shelf_1.use_as_storage = True
 
             shelf_2 = ShelfLayer.create_with_new_body_in_world(
                 name=PrefixedName("shelf_2"),
@@ -234,6 +219,7 @@ class KitchenEnvironment:
                 ),
                 scale=Scale(0.40, 0.76, 0.02),
             )
+            shelf_2.use_as_storage = True
 
             # # Creating doors manually and attaching them directly to the cupboard
             # door_scale = Scale(0.02, 0.40, 1.055)
@@ -346,8 +332,9 @@ class KitchenEnvironment:
                 world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=0.537, y=-2.181, z=0.745, yaw=np.pi * 3 / 2
                 ),
-                scale=Scale(x=0.59, y=0.65, z=0.02),
+                scale=Scale(x=0.57, y=0.60, z=0.02),
             )
+            refrigerator_layer.use_as_storage = True
 
             counterTop = CounterTop.create_with_new_body_in_world(
                 world=world,
