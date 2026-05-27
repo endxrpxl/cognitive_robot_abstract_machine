@@ -1,4 +1,5 @@
 from typing import List, Optional
+
 from krrood.entity_query_language.factories import (
     variable_from,
     entity,
@@ -10,19 +11,18 @@ from krrood.entity_query_language.factories import (
     not_,
     set_of,
     type_,
-    or_,
+    average,
+    flat_variable,
+    count,
 )
+from krrood.entity_query_language.predicate import symbolic_function, length
 from krrood.entity_query_language.query.query import Entity
-from krrood.entity_query_language.predicate import symbolic_function, length, HasType
 from krrood.utils import recursive_subclasses
-
 from semantic_digital_twin.reasoning.predicates import (
     is_supported_by,
     is_supporting,
     compute_euclidean_planar_distance,
     inheritance_path_length_,
-    InsideOf,
-    ContainsType,
 )
 from semantic_digital_twin.semantic_annotations.mixins import (
     HasSupportingSurface,
@@ -30,16 +30,14 @@ from semantic_digital_twin.semantic_annotations.mixins import (
     HasRootBody,
 )
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
-    Furniture,
-    Cabinet,
+    StorageObject,
 )
+from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Color
-
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     SemanticAnnotation,
-    KinematicStructureEntity,
 )
 
 
@@ -53,10 +51,25 @@ def semantic_annotations_on_surfaces(
     return: List of SemanticAnnotations that are supported by the given supporting_surfaces.
     """
     objects = []
+    for surface in supporting_surfaces:
+        objects += semantic_annotations_on_surface(surface, world)
+
+    return objects
+
+
+def semantic_annotations_on_surface(
+    supporting_surface: HasSupportingSurface, world: World
+) -> List[HasRootBody]:
+    """
+    Queries a list of Semantic annotations that are on top of the given annotation (ex. Tables).
+    param: supporting_surface: SemanticAnnotation that is supporting other annotations.
+    :param world: World object that contains the supporting_surfaces.
+    return: List of SemanticAnnotations that are supported by the given supporting_surface.
+    """
+    objects = []
     with world.modify_world():
-        for surface in supporting_surfaces:
-            surface.infer_objects_on_surface()
-            objects.extend(surface.objects)
+        supporting_surface.infer_objects_on_surface()
+        objects.extend(supporting_surface.objects)
 
     return objects
 
@@ -222,41 +235,61 @@ def sort_annotations_by_volume(
     )
 
 
-def preferred_surface_for_object(
-    object_of_interest: SemanticAnnotation,
-) -> Entity[HasSupportingSurface]:
-    """
-
-    :param object_of_interest: The semantic annotation of the object for which to find the preferred surface.
-    :return: The most suitable supporting surface based on similarity and proximity, or None if no surfaces are available.
-    """
-    world: World = object_of_interest._world
-    supporting_surface_in_world = variable(
-        HasSupportingSurface, world.semantic_annotations
-    )
-    preferred_storage = variable(
-        object_of_interest.preferred_storage_location, world.semantic_annotations
-    )
+def sort_surfaces_by_most_similar_objects_to_object(
+    surfaces: List[HasSupportingSurface],
+    object_of_interest: StorageObject,
+    threshold: float = 3.0,
+) -> tuple[Entity[HasSupportingSurface], Entity[HasSupportingSurface]]:
+    world = object_of_interest._world
 
     @symbolic_function
-    def inside_of(
-        body: KinematicStructureEntity, other: KinematicStructureEntity
-    ) -> float:
-        return InsideOf(body, other).compute_containment_ratio()
+    def get_semantic_annotations_on_surface(
+        surface: HasSupportingSurface,
+    ) -> list[HasRootBody]:
+        return semantic_annotations_on_surface(surface, world)
 
-    preferred_surfaces = an(
-        entity(supporting_surface_in_world).where(
-            or_(
-                and_(
-                    HasType(
-                        supporting_surface_in_world,
-                        object_of_interest.preferred_storage_location,
-                    ),
-                    not_(HasType(supporting_surface_in_world, Cabinet)),
-                ),
-                inside_of(supporting_surface_in_world.root, preferred_storage.root)
-                >= 1.0,
+    surface = variable_from(surfaces)
+
+    objs = get_semantic_annotations_on_surface(surface)
+    avg = average(
+        inheritance_path_length_(type(object_of_interest), type_(flat_variable(objs)))
+    )
+
+    query = (
+        an(entity(surface))
+        .grouped_by(surface)
+        .having(and_(count(surface.objects) > 0), avg <= threshold)
+        .ordered_by(
+            avg,
+            descending=False,
+        )
+    )
+
+    empty = an(entity(surface).grouped_by(surface).having(count(surface.objects) == 0))
+
+    return query, empty
+
+
+def storages_with_environment_for_object(
+    object_of_interest: StorageObject,
+) -> Entity[HasSupportingSurface]:
+
+    world: World = object_of_interest._world
+
+    storage_in_world = variable(HasSupportingSurface, world.semantic_annotations)
+    preferred_storages = an(
+        entity(storage_in_world).where(
+            and_(
+                storage_in_world.storage_environment
+                == object_of_interest.preferred_storage_environment,
+                storage_in_world.use_as_storage,
             )
         )
     )
-    return preferred_surfaces
+    return preferred_storages  #
+
+
+def filter_valid_positions_for_object(
+    object_of_interest: HasRootBody, poses: List[Pose]
+) -> list[Pose]:
+    world: World = object_of_interest._world
