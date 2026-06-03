@@ -39,6 +39,8 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Cabinet,
     Milk,
     Cereal,
+    Cupboard,
+    ShelfLayer,
 )
 from semantic_digital_twin.spatial_types import (
     Vector3,
@@ -997,6 +999,30 @@ class TestFactories(unittest.TestCase):
             double_door.calculate_left_right_door_from_view_point(view_point_back),
             (door_right, door_left),
         )
+
+    def test_shelves_inside_cabinet(self):
+        world = World()
+        root = Body(name=PrefixedName("root"))
+        with world.modify_world():
+            world.add_body(root)
+            cupboard = Cupboard.create_with_new_body_in_world(
+                world=world,
+                name=PrefixedName("cupboard"),
+                world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=0, y=0, z=0
+                ),
+                scale=Scale(1, 1, 2),
+            )
+
+            cupboard_layer = ShelfLayer.create_with_new_body_in_world(
+                world=world,
+                name=PrefixedName("cupboard_layer"),
+                world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=0, y=0, z=0
+                ),
+                scale=Scale(0.95, 0.95, 0.02),
+            )
+        self.assertIn(cupboard_layer, cupboard.shelf_layers)
 
 
 if __name__ == "__main__":
