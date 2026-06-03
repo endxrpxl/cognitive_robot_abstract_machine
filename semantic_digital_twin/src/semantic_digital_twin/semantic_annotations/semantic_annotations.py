@@ -423,7 +423,8 @@ class CabinetWithLayers(Cabinet, ABC):
         The shelf layers inside the cabinet.
         """
         if not self._shelf_layers:
-            self.add_shelf_layers()
+            with self._world.modify_world():
+                self.add_shelf_layers()
         return self._shelf_layers
 
     @synchronized_attribute_modification
