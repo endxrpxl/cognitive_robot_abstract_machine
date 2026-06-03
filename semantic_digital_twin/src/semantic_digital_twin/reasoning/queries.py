@@ -273,7 +273,12 @@ def sort_surfaces_by_most_similar_objects_to_object(
 def storages_with_environment_for_object(
     object_of_interest: StorageObject,
 ) -> Entity[HasSupportingSurface]:
+    """
+    Finds all supporting surfaces in the world that have the same storage environment as the given object of interest and are marked as usable for storage.
 
+    :param object_of_interest: The object of interest.
+    :return: The matching supported surfaces.
+    """
     world: World = object_of_interest._world
 
     storage_in_world = variable(HasSupportingSurface, world.semantic_annotations)
@@ -286,7 +291,7 @@ def storages_with_environment_for_object(
             )
         )
     )
-    return preferred_storages  #
+    return preferred_storages
 
 
 def filter_valid_positions_for_object(

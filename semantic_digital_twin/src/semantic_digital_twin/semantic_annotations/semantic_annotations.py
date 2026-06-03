@@ -397,6 +397,11 @@ class Cabinet(Furniture, HasCaseAsRootBody):
 
     @classproperty
     def infers_storage_environment(self) -> StorageEnvironments:
+        """
+        The storage environment that this cabinet infers for storages inside it.
+
+        E.g.: A Fridge has a supporting surface on top, but that is not actually cooled, only the shelf layers inside the fridge.
+        """
         return StorageEnvironments.NORMAL
 
     @classproperty
@@ -406,11 +411,17 @@ class Cabinet(Furniture, HasCaseAsRootBody):
 
 @dataclass(eq=False)
 class CabinetWithLayers(Cabinet, ABC):
+    """
+    A cabinet with shelf layers, that are inferred from the world.
+    """
 
     _shelf_layers: List[ShelfLayer] = field(default_factory=list)
 
     @property
     def shelf_layers(self) -> List[ShelfLayer]:
+        """
+        The shelf layers inside the cabinet.
+        """
         if not self._shelf_layers:
             self.add_shelf_layers()
         return self._shelf_layers

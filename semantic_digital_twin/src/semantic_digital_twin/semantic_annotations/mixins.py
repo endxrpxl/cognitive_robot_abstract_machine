@@ -614,6 +614,9 @@ class HasStorageSpace(HasRootBody, ABC):
     """
 
     use_as_storage: bool = field(default=False)
+    """
+    Whether the semantic annotation should be used as a storage space for transporting actions.
+    """
 
     @classproperty
     def storage_environment(self) -> StorageEnvironments:
