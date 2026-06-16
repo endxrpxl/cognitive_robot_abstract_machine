@@ -41,9 +41,7 @@ class FreeSurfaceAction(ActionDescription):
             ignore_dimension=Vector3(z=1.0),
         ).tolist()
         for obj in objects_on_surface:
-            storages_with_environment = storages_with_environment_for_object(
-                obj
-            ).tolist()
+            storages_with_environment = storages_with_environment_for_object(obj)
             sorted_storages, empty_storages = (
                 sort_surfaces_by_most_similar_objects_to_object(
                     storages_with_environment, obj
