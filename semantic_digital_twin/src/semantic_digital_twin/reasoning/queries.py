@@ -58,7 +58,7 @@ def semantic_annotations_on_surfaces(
 
 
 def semantic_annotations_on_surface(
-    supporting_surface: HasSupportingSurface, world: World
+    supporting_surface: HasSupportingSurface, world: Optional[World] = None
 ) -> List[HasRootBody]:
     """
     Queries a list of Semantic annotations that are on top of the given annotation (ex. Tables).
@@ -66,6 +66,9 @@ def semantic_annotations_on_surface(
     :param world: World object that contains the supporting_surfaces.
     return: List of SemanticAnnotations that are supported by the given supporting_surface.
     """
+    if world is None:
+        world = supporting_surface._world
+
     objects = []
     with world.modify_world():
         supporting_surface.infer_objects_on_surface()
@@ -292,9 +295,3 @@ def storages_with_environment_for_object(
         )
     )
     return preferred_storages.tolist()
-
-
-def filter_valid_positions_for_object(
-    object_of_interest: HasRootBody, poses: List[Pose]
-) -> list[Pose]:
-    world: World = object_of_interest._world

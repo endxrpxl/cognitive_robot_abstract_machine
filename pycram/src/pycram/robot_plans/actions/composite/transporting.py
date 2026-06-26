@@ -7,6 +7,7 @@ from typing import List
 import numpy as np
 from typing_extensions import Optional, Any
 
+from ansgar_bt.reasoner import StorageReasoner
 from krrood.entity_query_language.factories import (
     an,
     entity,
@@ -74,29 +75,6 @@ class TransportAction(ActionDescription):
 
     def __post_init__(self):
         self.object_designator = self.semantic_annotation.root
-        if not self.target_location:
-            self.target_location = self.generate_target_location()
-
-    def generate_target_location(self) -> Pose:
-        storages_with_environment = storages_with_environment_for_object(
-            self.semantic_annotation
-        ).tolist()
-        sorted_storages, empty_storages = (
-            sort_surfaces_by_most_similar_objects_to_object(
-                storages_with_environment, self.semantic_annotation
-            )
-        )
-        storages_to_try: List[HasSupportingSurface] = (
-            sorted_storages.tolist() + empty_storages.tolist()
-        )
-        poses_to_try = []
-        for storage in storages_to_try:
-            points = storage.sample_points_from_surface(self.semantic_annotation)
-            for point in points:
-                poses_to_try.append(
-                    Pose(position=point, reference_frame=point.reference_frame)
-                )
-        ...
 
     def inside_container(self) -> List[Body]:
         bodies = []
@@ -185,6 +163,12 @@ class TransportAction(ActionDescription):
         self.add_subplan(self._make_place_plan(pickup_pose)).perform()
 
     def _make_place_plan(self, pickup_pose: GraspPose):
+
+        if not self.target_location:
+            storage_reasoner = StorageReasoner(context=self.plan_node.plan.context)
+            reason_results = storage_reasoner.reason_for_object(
+                storage_object=self.semantic_annotation, arm=pickup_pose.arm
+            )
 
         return sequential(
             children=[

@@ -321,20 +321,49 @@ class KitchenEnvironment:
                 world=world,
                 name=PrefixedName("refrigerator"),
                 world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
-                    x=0.537, y=-2.181, z=0.745, yaw=np.pi * 3 / 2
+                    x=0.537, y=-2.181, z=0.845, yaw=np.pi * 3 / 2
                 ),
                 scale=Scale(x=0.60, y=0.658, z=1.49),
             )
 
-            refrigerator_layer = ShelfLayer.create_with_new_body_in_world(
+            refrigerator_layer1 = ShelfLayer.create_with_new_body_in_world(
                 world=world,
-                name=PrefixedName("fridge_layer"),
+                name=PrefixedName("fridge_layer1"),
                 world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
-                    x=0.537, y=-2.181, z=0.745, yaw=np.pi * 3 / 2
+                    x=0.537, y=-2.181, z=0.945, yaw=np.pi * 3 / 2
                 ),
                 scale=Scale(x=0.57, y=0.60, z=0.02),
             )
-            refrigerator_layer.use_as_storage = True
+            refrigerator_layer1.use_as_storage = True
+
+            refrigerator_layer2 = ShelfLayer.create_with_new_body_in_world(
+                world=world,
+                name=PrefixedName("fridge_layer2"),
+                world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=0.537, y=-2.181, z=0.445, yaw=np.pi * 3 / 2
+                ),
+                scale=Scale(x=0.57, y=0.60, z=0.02),
+            )
+            refrigerator_layer2.use_as_storage = True
+
+            refrigerator2 = Fridge.create_with_new_body_in_world(
+                world=world,
+                name=PrefixedName("refrigerator2"),
+                world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=-0.537, y=-2.181, z=0.845, yaw=np.pi * 3 / 2
+                ),
+                scale=Scale(x=0.60, y=0.658, z=1.459),
+            )
+
+            refrigerator_layer21 = ShelfLayer.create_with_new_body_in_world(
+                world=world,
+                name=PrefixedName("fridge_layer21"),
+                world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=-0.537, y=-2.181, z=0.745, yaw=np.pi * 3 / 2
+                ),
+                scale=Scale(x=0.57, y=0.60, z=0.02),
+            )
+            refrigerator_layer21.use_as_storage = True
 
             counterTop = CounterTop.create_with_new_body_in_world(
                 world=world,
