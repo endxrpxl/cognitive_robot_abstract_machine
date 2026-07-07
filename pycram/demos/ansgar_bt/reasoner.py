@@ -120,6 +120,11 @@ class StorageReasoner:
                 reachable=True,
                 context=self.context,
             )
+            costmap = place_loc.setup_costmaps(
+                target=place_loc.target,
+                visible=place_loc.visible,
+                reachable=place_loc.reachable,
+            )
             place_pose = place_loc.ground()
             if place_pose:
                 poses.append(pose)
