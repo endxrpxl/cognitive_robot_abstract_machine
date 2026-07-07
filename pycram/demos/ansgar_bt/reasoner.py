@@ -68,7 +68,6 @@ class StorageReasoner:
         results: List[StorageReasonerResult] = []
 
         for storage in self.storages:
-            print(storage.name.name)
             results.append(self._reason_storage(storage_object, storage, arm))
         return results
 
@@ -95,12 +94,12 @@ class StorageReasoner:
         satisfied_constraints.append(
             StorageReasonerConstraints.STORAGE_ENVIRONMENT.value
         )
-        print("Env")
 
         # free space
         positions = storage.sample_points_from_surface(
             body_to_sample_for=storage_object,
             category_of_interest=type(storage_object),
+            amount=20,
         )
         if not positions:
             return StorageReasonerResult(
@@ -110,7 +109,6 @@ class StorageReasoner:
                 violated_constraints=[StorageReasonerConstraints.FREE_SPACE.value],
             )
         satisfied_constraints.append(StorageReasonerConstraints.FREE_SPACE.value)
-        print("Space")
         # check reachable
         poses: List[Pose] = []
         for position in positions:
@@ -137,7 +135,6 @@ class StorageReasoner:
 
         score += len(poses) * 0.1
         satisfied_constraints.append(StorageReasonerConstraints.REACHABLE.value)
-        print("reach")
         # check similar objects
         object_on_surface = variable(
             StorageObject,
@@ -155,8 +152,6 @@ class StorageReasoner:
             satisfied_constraints.append(
                 StorageReasonerConstraints.SIMILAR_OBJECTS.value
             )
-
-        print("sim")
 
         return StorageReasonerResult(
             surface=storage,
