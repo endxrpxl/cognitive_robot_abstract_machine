@@ -71,14 +71,14 @@ for spawned_item in spawned_items:
         set_color(semantic_annotation=spawned_item, color=Color.RED())
 
 ###
-# with main_execution_type:
-#     execute_single(
-#         CleanTableAction(surface_to_clean=_table, arm=Arms.LEFT),
-#         context=main_context,
-#     ).perform()
+with main_execution_type:
+    execute_single(
+        CleanTableAction(surface_to_clean=_table, arm=Arms.LEFT),
+        context=main_context,
+    ).perform()
 
-storage_reasoner = StorageReasoner(main_context)
-test = storage_reasoner.reason_for_object(
-    storage_object=spawned_items[1], arm=Arms.LEFT
-)
-print(test, sep="\n")
+# storage_reasoner = StorageReasoner(main_context)
+# test = storage_reasoner.select_usable_results(
+#     storage_object=spawned_items[1], arm=Arms.LEFT
+# )
+# print(test, sep="\n")

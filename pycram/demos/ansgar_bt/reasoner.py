@@ -98,7 +98,6 @@ class StorageReasoner:
         # free space
         positions = storage.sample_points_from_surface(
             body_to_sample_for=storage_object,
-            category_of_interest=type(storage_object),
             amount=20,
         )
         if not positions:

@@ -16,6 +16,7 @@ from semantic_digital_twin.reasoning.queries import (
 from semantic_digital_twin.semantic_annotations.mixins import (
     HasSupportingSurface,
     StorageEnvironments,
+    HasRootBody,
 )
 from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.world_description.world_entity import SemanticAnnotation
@@ -49,7 +50,7 @@ class CleanTableAction(ActionDescription):
     Strategy to use for pick up.
     """
 
-    def _order_objects(self) -> List[SemanticAnnotation]:
+    def _order_objects(self) -> List[HasRootBody]:
         match self.pick_up_strategy:
             case PickUpStrategy.NEAREST_FIRST:
                 return get_next_object_using_planar_distance(
@@ -81,20 +82,16 @@ class CleanTableAction(ActionDescription):
         objects_on_surface = self._order_objects()
         storage_reasoner = StorageReasoner(self.plan.context)
 
-        self.add_subplan(execute_single(ParkArmsAction(Arms.BOTH))).perform()
-
         for obj in objects_on_surface:
             self._transport_object(obj, storage_reasoner)
 
     def _transport_object(
-        self, obj: SemanticAnnotation, storage_reasoner: StorageReasoner
+        self, obj: HasRootBody, storage_reasoner: StorageReasoner
     ) -> None:
         possible_solutions = storage_reasoner.select_usable_results(
             storage_object=obj, arm=self.arm
         )
-        print("Test")
         if not possible_solutions:
-            print("Test")
             logger.warning(f"No storage solutions found for object {obj.name.name}")
             return
 
@@ -105,17 +102,15 @@ class CleanTableAction(ActionDescription):
                 break
 
         if not stored:
-            logger.error(
+            raise RuntimeError(
                 f"Could not store object {obj.name.name}: All candidates failed."
             )
 
-    def _try_solution(
-        self, obj: SemanticAnnotation, solution: StorageReasonerResult
-    ) -> bool:
+    def _try_solution(self, obj: HasRootBody, solution: StorageReasonerResult) -> bool:
         poses = solution.poses
         for pose in poses:
             transport_action = TransportAction(
-                object_designator=obj, target_location=pose, arm=self.arm
+                object_designator=obj.root, target_location=pose, arm=self.arm
             )
 
             try:
