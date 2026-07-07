@@ -215,7 +215,7 @@ class KitchenEnvironment:
                 name=PrefixedName("shelf_2"),
                 world=world,
                 world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
-                    x=4.55, y=4.72, z=1.51
+                    x=4.55, y=4.72, z=1.1
                 ),
                 scale=Scale(0.40, 0.76, 0.02),
             )
