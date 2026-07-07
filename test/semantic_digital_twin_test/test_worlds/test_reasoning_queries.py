@@ -8,7 +8,6 @@ from semantic_digital_twin.reasoning.queries import (
     filter_annotations_by_color,
     annotation_class_by_label,
     sort_annotations_by_volume,
-    storages_with_environment_for_object,
 )
 from semantic_digital_twin.semantic_annotations.semantic_annotations import *
 from semantic_digital_twin.world import World
@@ -199,20 +198,3 @@ def test_sort_annotations_by_volume(kitchen_environment_fixture):
     assert sort_annotations_by_volume(
         semantic_annotations_on_surfaces([table2], kitchen_environment_fixture)
     ) == [lettuce, carrot]
-
-
-def test_storages_with_environment_for_object(simple_cabinets_world):
-    """
-    Tests the storages_with_environment_for_object function by verifying the returned storages for a given object.
-    """
-    world = simple_cabinets_world
-    apple = world.get_semantic_annotation_by_name("apple")
-    milk = world.get_semantic_annotation_by_name("milk")
-    empty_table = world.get_semantic_annotation_by_name("empty_table")
-    fridge_layer = world.get_semantic_annotation_by_name("fridge_layer")
-    cupboard_layer = world.get_semantic_annotation_by_name("cupboard_layer")
-
-    assert storages_with_environment_for_object(apple) == [empty_table, cupboard_layer]
-    assert storages_with_environment_for_object(milk) == [
-        fridge_layer,
-    ]

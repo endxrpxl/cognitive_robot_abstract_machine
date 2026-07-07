@@ -1,5 +1,7 @@
+import logging
+
+from ansgar_bt.actions.actions import CleanTableAction
 from ansgar_bt.reasoner import StorageReasoner
-from demos.ansgar_bt.actions.actions import FreeSurfaceAction
 from demos.ansgar_bt.helpers.object_helpers import (
     seed_semantic_annotations_on_surface,
     set_color,
@@ -19,6 +21,11 @@ from semantic_digital_twin.world_description.geometry import Scale, Color
 ### Setup
 main_context, main_execution_type = setup_context(simulated=True)
 world: World = main_context.world
+
+
+logger = logging.getLogger(__name__)
+
+logger.setLevel(level=logging.DEBUG)
 
 _table: Table = world.get_semantic_annotation_by_name("cooking_table")
 _items = {
@@ -66,12 +73,12 @@ for spawned_item in spawned_items:
 ###
 # with main_execution_type:
 #     execute_single(
-#         FreeSurfaceAction(surface_to_clean=_table, arm=Arms.LEFT),
+#         CleanTableAction(surface_to_clean=_table, arm=Arms.LEFT),
 #         context=main_context,
 #     ).perform()
 
-
-reasoner = StorageReasoner(context=main_context)
-test = reasoner.reason_for_object(spawned_items[0])
-for t in test:
-    print(t)
+storage_reasoner = StorageReasoner(main_context)
+test = storage_reasoner.reason_for_object(
+    storage_object=spawned_items[1], arm=Arms.LEFT
+)
+print(test, sep="\n")

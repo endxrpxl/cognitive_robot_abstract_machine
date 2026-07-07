@@ -5,20 +5,16 @@ from typing import List, Optional, Tuple
 from krrood.entity_query_language.factories import (
     entity,
     variable,
-    an,
     count,
     type_,
     the,
+    an,
 )
 from pycram.datastructures.dataclasses import Context
 from pycram.datastructures.enums import Arms
-from pycram.datastructures.grasp import GraspDescription
 from pycram.locations.locations import CostmapLocation
-from pycram.plans.failures import BodyUnfetchable
 from semantic_digital_twin.reasoning.predicates import inheritance_path_length_
-from semantic_digital_twin.reasoning.queries import semantic_annotations_on_surface
 from semantic_digital_twin.semantic_annotations.mixins import (
-    HasStorageSpace,
     HasSupportingSurface,
 )
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
@@ -34,7 +30,7 @@ class StorageReasonerResult:
     score: float
     satisfied_constraints: List[str]
     violated_constraints: List[str]
-    pose_grasp: Optional[List[Tuple[Pose, CostmapLocation]]] = field(default=None)
+    poses: List[Pose] = field(default=None)
 
     def __repr__(self):
         result = f"surface={self.surface.name.name}, score={self.score}, satisfied_constraints={self.satisfied_constraints}, violated_constraints={self.violated_constraints}"
@@ -63,124 +59,132 @@ class StorageReasoner:
             entity(surface_in_world).where(surface_in_world.use_as_storage).tolist()
         )
 
+        self.constraints = [c.value for c in StorageReasonerConstraints]
+
     def reason_for_object(
         self, storage_object: StorageObject, arm: Optional[Arms] = None
     ) -> List[StorageReasonerResult]:
 
         results: List[StorageReasonerResult] = []
 
-        constraints = [c.value for c in StorageReasonerConstraints]
-
         for storage in self.storages:
-
-            satisfied_constraints = []
-            score = 0.0
-
-            if (
-                storage.storage_environment
-                != storage_object.preferred_storage_environment
-            ):
-                results.append(
-                    StorageReasonerResult(
-                        surface=storage,
-                        score=score,
-                        satisfied_constraints=[],
-                        violated_constraints=[
-                            StorageReasonerConstraints.STORAGE_ENVIRONMENT.value
-                        ],
-                    )
-                )
-                continue
-            satisfied_constraints.append(
-                StorageReasonerConstraints.STORAGE_ENVIRONMENT.value
-            )
-
-            # free space
-            positions = storage.sample_points_from_surface(
-                body_to_sample_for=storage_object,
-                category_of_interest=type(storage_object),
-            )
-            if not positions:
-                results.append(
-                    StorageReasonerResult(
-                        surface=storage,
-                        score=score,
-                        satisfied_constraints=satisfied_constraints,
-                        violated_constraints=[
-                            StorageReasonerConstraints.FREE_SPACE.value
-                        ],
-                    )
-                )
-                continue
-            satisfied_constraints.append(StorageReasonerConstraints.FREE_SPACE.value)
-
-            # check reachable
-            positions_locations: List[Tuple[Point3, CostmapLocation]] = []
-            for position in positions:
-                if len(positions_locations) >= 10:
-                    break
-
-                place_loc = CostmapLocation(
-                    target=Pose(
-                        position=position, reference_frame=position.reference_frame
-                    ),
-                    reachable_arm=arm,
-                    reachable=True,
-                    context=self.context,
-                )
-                place_pose = place_loc.ground()
-                if place_pose:
-                    positions_locations.append((position, place_pose))
-
-            if not positions_locations:
-                results.append(
-                    StorageReasonerResult(
-                        surface=storage,
-                        score=score,
-                        satisfied_constraints=satisfied_constraints,
-                        violated_constraints=[
-                            StorageReasonerConstraints.REACHABLE.value
-                        ],
-                    )
-                )
-                continue
-
-            score += len(positions_locations) * 0.1
-            satisfied_constraints.append(StorageReasonerConstraints.REACHABLE.value)
-
-            # check similar objects
-            object_on_surface = variable(
-                StorageObject,
-                domain=storage.objects,
-            )
-            similarity_threshold = 1
-            count_similar_objects = the(
-                entity(count(object_on_surface)).where(
-                    inheritance_path_length_(
-                        type(storage_object), type_(object_on_surface)
-                    )
-                    <= similarity_threshold
-                )
-            ).first()
-            if count_similar_objects > 0:
-                score += count_similar_objects
-                satisfied_constraints.append(
-                    StorageReasonerConstraints.SIMILAR_OBJECTS.value
-                )
-
-            results.append(
-                StorageReasonerResult(
-                    surface=storage,
-                    score=score,
-                    satisfied_constraints=satisfied_constraints,
-                    violated_constraints=[
-                        c for c in constraints if c not in satisfied_constraints
-                    ],
-                    pose_grasp=positions_locations,
-                )
-            )
-
+            print(storage.name.name)
+            results.append(self._reason_storage(storage_object, storage, arm))
         return results
 
-    # def get_highest_score_result(self) -> StorageReasonerResult:
-    #     results = self.reason_for_object()
+    def _reason_storage(
+        self,
+        storage_object: StorageObject,
+        storage: HasSupportingSurface,
+        arm: Optional[Arms] = None,
+    ) -> StorageReasonerResult:
+
+        satisfied_constraints = []
+        score = 0.0
+
+        if storage.storage_environment != storage_object.preferred_storage_environment:
+            return StorageReasonerResult(
+                surface=storage,
+                score=score,
+                satisfied_constraints=[],
+                violated_constraints=[
+                    StorageReasonerConstraints.STORAGE_ENVIRONMENT.value
+                ],
+            )
+
+        satisfied_constraints.append(
+            StorageReasonerConstraints.STORAGE_ENVIRONMENT.value
+        )
+        print("Env")
+
+        # free space
+        positions = storage.sample_points_from_surface(
+            body_to_sample_for=storage_object,
+            category_of_interest=type(storage_object),
+        )
+        if not positions:
+            return StorageReasonerResult(
+                surface=storage,
+                score=score,
+                satisfied_constraints=satisfied_constraints,
+                violated_constraints=[StorageReasonerConstraints.FREE_SPACE.value],
+            )
+        satisfied_constraints.append(StorageReasonerConstraints.FREE_SPACE.value)
+        print("Space")
+        # check reachable
+        poses: List[Pose] = []
+        for position in positions:
+            if len(poses) >= 10:
+                break
+            pose = Pose(position=position, reference_frame=position.reference_frame)
+            place_loc = CostmapLocation(
+                target=pose,
+                reachable_arm=arm,
+                reachable=True,
+                context=self.context,
+            )
+            place_pose = place_loc.ground()
+            if place_pose:
+                poses.append(pose)
+
+        if not poses:
+            return StorageReasonerResult(
+                surface=storage,
+                score=score,
+                satisfied_constraints=satisfied_constraints,
+                violated_constraints=[StorageReasonerConstraints.REACHABLE.value],
+            )
+
+        score += len(poses) * 0.1
+        satisfied_constraints.append(StorageReasonerConstraints.REACHABLE.value)
+        print("reach")
+        # check similar objects
+        object_on_surface = variable(
+            StorageObject,
+            domain=storage.objects,
+        )
+        similarity_threshold = 1
+        count_similar_objects = the(
+            entity(count(object_on_surface)).where(
+                inheritance_path_length_(type(storage_object), type_(object_on_surface))
+                <= similarity_threshold
+            )
+        ).first()
+        if count_similar_objects > 0:
+            score += count_similar_objects
+            satisfied_constraints.append(
+                StorageReasonerConstraints.SIMILAR_OBJECTS.value
+            )
+
+        print("sim")
+
+        return StorageReasonerResult(
+            surface=storage,
+            score=score,
+            satisfied_constraints=satisfied_constraints,
+            violated_constraints=[
+                c for c in self.constraints if c not in satisfied_constraints
+            ],
+            poses=poses,
+        )
+
+    def select_usable_results(
+        self, storage_object: StorageObject, arm: Optional[Arms] = None
+    ) -> List[StorageReasonerResult]:
+        result = variable(
+            type_=StorageReasonerResult,
+            domain=self.reason_for_object(storage_object, arm),
+        )
+        query = an(
+            entity(result)
+            .where(result.score > 0.0)
+            .ordered_by(result.score, descending=True)
+        )
+
+        return query.tolist()
+
+    def select_best_result(
+        self, storage_object: StorageObject, arm: Optional[Arms] = None
+    ) -> StorageReasonerResult | None:
+        results = self.select_usable_results(storage_object, arm)
+        return results[0] or None

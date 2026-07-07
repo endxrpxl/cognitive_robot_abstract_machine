@@ -5,46 +5,34 @@ from datetime import timedelta
 from typing import List
 
 import numpy as np
-from typing_extensions import Optional, Any
 
-from ansgar_bt.reasoner import StorageReasoner
 from krrood.entity_query_language.factories import (
     an,
     entity,
     variable,
     underspecified,
 )
-from pycram.config.action_conf import ActionConfig
-from pycram.datastructures.enums import Arms, AxisIdentifier
-from pycram.datastructures.grasp import GraspDescription, GraspPose
 from pycram.locations.locations import CostmapLocation
 from pycram.plans.factories import sequential, execute_single
-from pycram.plans.failures import ConfigurationNotReached, BodyUnfetchable
-from pycram.robot_plans.actions.base import ActionDescription
 from pycram.robot_plans.actions.composite.facing import FaceAtAction
 from pycram.robot_plans.actions.core.container import OpenAction
 from pycram.robot_plans.actions.core.navigation import NavigateAction
 from pycram.robot_plans.actions.core.pick_up import PickUpAction
 from pycram.robot_plans.actions.core.placing import PlaceAction
-from pycram.robot_plans.actions.core.robot_body import (
-    ParkArmsAction,
-    MoveTorsoAction,
-    CarryAction,
-)
+from pycram.robot_plans.actions.core.robot_body import ParkArmsAction, MoveTorsoAction
 from semantic_digital_twin.datastructures.definitions import TorsoState
-from semantic_digital_twin.reasoning.predicates import InsideOf
-from semantic_digital_twin.reasoning.queries import (
-    storages_with_environment_for_object,
-    sort_surfaces_by_most_similar_objects_to_object,
-)
-from semantic_digital_twin.semantic_annotations.mixins import (
-    HasRootBody,
-    IsSpillable,
-    HasSupportingSurface,
-)
+from semantic_digital_twin.reasoning.predicates import InsideOf, allclose
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Drawer
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.world_entity import Body
+from typing_extensions import Optional, Any
+
+from pycram.config.action_conf import ActionConfig
+from pycram.datastructures.enums import Arms
+from pycram.datastructures.grasp import GraspDescription, GraspPose
+
+from pycram.plans.failures import ConfigurationNotReached, BodyUnfetchable
+from pycram.robot_plans.actions.base import ActionDescription
 
 
 @dataclass
@@ -53,9 +41,14 @@ class TransportAction(ActionDescription):
     Transports an object to a position using an arm
     """
 
-    semantic_annotation: HasRootBody = field(repr=False)
+    object_designator: Body = field(repr=False)
     """
-    Semantic annotation describing the object that should be transported.
+    Object designator_description describing the object that should be transported.
+    """
+
+    target_location: Pose
+    """
+    Target Location to which the object should be transported
     """
 
     arm: Optional[Arms]
@@ -63,18 +56,10 @@ class TransportAction(ActionDescription):
     Arm that should be used
     """
 
-    target_location: Optional[Pose] = None
-    """
-    Target Location to which the object should be transported
-    """
-
     grasp_description: Optional[GraspDescription] = None
     """
     Grasp Description that should be used for picking up the object
     """
-
-    def __post_init__(self):
-        self.object_designator = self.semantic_annotation.root
 
     def inside_container(self) -> List[Body]:
         bodies = []
@@ -133,18 +118,6 @@ class TransportAction(ActionDescription):
         if not pickup_pose:
             raise BodyUnfetchable(self.object_designator, self.arm)
 
-        if isinstance(self.semantic_annotation, IsSpillable):
-            print("Spillable")
-            park_arms = sequential(
-                [
-                    CarryAction(pickup_pose.arm, tip_axis=AxisIdentifier.Z),
-                    ParkArmsAction(1 - pickup_pose.arm),
-                ]
-            )
-            pass
-        else:
-            park_arms = ParkArmsAction(Arms.BOTH)
-
         self.add_subplan(
             sequential(
                 [
@@ -154,7 +127,7 @@ class TransportAction(ActionDescription):
                         pickup_pose.arm,
                         grasp_description=pickup_pose.grasp_description,
                     ),
-                    park_arms,
+                    ParkArmsAction(Arms.BOTH),
                     MoveTorsoAction(TorsoState.HIGH),
                 ]
             )
@@ -163,12 +136,6 @@ class TransportAction(ActionDescription):
         self.add_subplan(self._make_place_plan(pickup_pose)).perform()
 
     def _make_place_plan(self, pickup_pose: GraspPose):
-
-        if not self.target_location:
-            storage_reasoner = StorageReasoner(context=self.plan_node.plan.context)
-            reason_results = storage_reasoner.reason_for_object(
-                storage_object=self.semantic_annotation, arm=pickup_pose.arm
-            )
 
         return sequential(
             children=[
@@ -196,16 +163,6 @@ class TransportAction(ActionDescription):
             ),
             keep_joint_states=True,
         )
-
-    # @staticmethod
-    # def pre_condition(variables, context: Context, kwargs) -> SymbolicExpression:
-    #     semantic_annotation: HasRootBody = kwargs["semantic_annotation"]
-    #     target_location: Pose = kwargs["target_location"]
-    #     bounding_box = semantic_annotation.as_bounding_box_collection_at_origin(
-    #         origin=target_location.to_homogeneous_matrix()
-    #     ).bounding_box()
-    #     placeable = is_place_occupied(box=bounding_box, world=context.world)
-    #     return placeable
 
     def validate(
         self, result: Optional[Any] = None, max_wait_time: Optional[timedelta] = None
