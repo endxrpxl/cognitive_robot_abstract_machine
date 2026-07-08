@@ -3,13 +3,13 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Optional, List
 
-from ansgar_bt.reasoner import StorageReasoner, StorageReasonerResult
+from pycram.querying.storage_reasoner import StorageReasoner, StorageReasonerResult
 from pycram.datastructures.enums import Arms
 from pycram.plans.factories import execute_single
 from pycram.plans.failures import ConfigurationNotReached, BodyUnfetchable
 from pycram.robot_plans.actions.base import ActionDescription
 from pycram.robot_plans.actions.composite.transporting import TransportAction
-from pycram.robot_plans.actions.core.robot_body import ParkArmsAction
+from pycram.robot_plans.actions.core.navigation import NavigateAction
 from semantic_digital_twin.reasoning.queries import (
     get_next_object_using_planar_distance,
 )
@@ -19,7 +19,7 @@ from semantic_digital_twin.semantic_annotations.mixins import (
     HasRootBody,
 )
 from semantic_digital_twin.spatial_types import Vector3
-from semantic_digital_twin.world_description.world_entity import SemanticAnnotation
+from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 logger = logging.getLogger(__name__)
 
