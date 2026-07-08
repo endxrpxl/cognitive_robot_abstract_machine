@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 class PickUpStrategy(Enum):
     NEAREST_FIRST = auto()
-    CATEGORY_FIRST = auto()
+    COLD_FIRST = auto()
 
 
 @dataclass
@@ -58,7 +58,7 @@ class CleanTableAction(ActionDescription):
                     supporting_surface=self.surface_to_clean,
                     ignore_dimension=Vector3(z=1.0),
                 ).tolist()
-            case PickUpStrategy.CATEGORY_FIRST:
+            case PickUpStrategy.COLD_FIRST:
                 objs_ordered_by_distance = get_next_object_using_planar_distance(
                     main_body=self.robot.root,
                     supporting_surface=self.surface_to_clean,
