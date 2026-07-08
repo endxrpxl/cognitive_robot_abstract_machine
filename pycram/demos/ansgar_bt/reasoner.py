@@ -186,4 +186,4 @@ class StorageReasoner:
         self, storage_object: StorageObject, arm: Optional[Arms] = None
     ) -> StorageReasonerResult | None:
         results = self.select_usable_results(storage_object, arm)
-        return results[0] or None
+        return results[0] if results else None

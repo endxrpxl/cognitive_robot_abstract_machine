@@ -123,12 +123,12 @@ class CleanTableAction(ActionDescription):
                 logger.warning(
                     f"Pose failed for object {obj.name.name} on surface {solution.surface.name.name}: {e}. Trying next pose."
                 )
-                return False
+                continue
             except Exception as e:
                 logger.exception(
                     f"Unexpected error while transporting {obj.name.name}: {e}. Trying next pose/surface."
                 )
-                return False
+                continue
 
         logger.warning(
             f"All poses for surface {solution.surface.name.name} failed at runtime for object {obj.name.name}. Trying next candidate."
