@@ -598,7 +598,6 @@ class HasHandle(HasRootBody, ABC):
 class StorageEnvironments(Enum):
     COLD = auto()
     NORMAL = auto()
-    WARM = auto()
 
 
 @dataclass(eq=False)
@@ -620,6 +619,14 @@ class HasStorageSpace(HasRootBody, ABC):
 
     @classproperty
     def storage_environment(self) -> StorageEnvironments:
+        """
+        The preferred storage environment for objects stored in this semantic annotation.
+
+        This class-level property indicates environmental constraints for objects placed inside or stored by this
+        annotation.
+
+        :return: A :class:`StorageEnvironments` enum value describing the storage requirements for this annotation.
+        """
         return StorageEnvironments.NORMAL
 
     @synchronized_attribute_modification

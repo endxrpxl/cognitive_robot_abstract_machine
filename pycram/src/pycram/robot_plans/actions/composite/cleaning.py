@@ -3,13 +3,12 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Optional, List
 
-from pycram.querying.storage_reasoner import StorageReasoner, StorageReasonerResult
 from pycram.datastructures.enums import Arms
 from pycram.plans.factories import execute_single
 from pycram.plans.failures import ConfigurationNotReached, BodyUnfetchable
+from pycram.querying.storage_reasoner import StorageReasoner, StorageReasonerResult
 from pycram.robot_plans.actions.base import ActionDescription
 from pycram.robot_plans.actions.composite.transporting import TransportAction
-from pycram.robot_plans.actions.core.navigation import NavigateAction
 from semantic_digital_twin.reasoning.queries import (
     get_next_object_using_planar_distance,
 )
@@ -19,14 +18,25 @@ from semantic_digital_twin.semantic_annotations.mixins import (
     HasRootBody,
 )
 from semantic_digital_twin.spatial_types import Vector3
-from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 logger = logging.getLogger(__name__)
 
 
 class PickUpStrategy(Enum):
+    """
+    Order in which :class:`CleanSurfaceAction` picks up objects from the surface it is cleaning.
+    """
+
     NEAREST_FIRST = auto()
+    """
+    Pick up objects in order of planar distance to the robot, closest first.
+    """
+
     COLD_FIRST = auto()
+    """
+    Pick up objects that prefer cold storage first, then normal; objects with the same preferred storage environment
+    keep their nearest-first relative order.
+    """
 
 
 @dataclass
@@ -51,6 +61,12 @@ class CleanSurfaceAction(ActionDescription):
     """
 
     def _order_objects(self) -> List[HasRootBody]:
+        """
+        Returns the objects currently on :attr:`surface_to_clean`, ordered according to
+        :attr:`pick_up_strategy`.
+
+        :return: Objects on the surface, in the order they should be picked up and stored.
+        """
         match self.pick_up_strategy:
             case PickUpStrategy.NEAREST_FIRST:
                 return get_next_object_using_planar_distance(
@@ -79,6 +95,15 @@ class CleanSurfaceAction(ActionDescription):
                 )
 
     def execute(self) -> None:
+        """
+        Orders the objects on :attr:`surface_to_clean` per :attr:`pick_up_strategy`, then
+        transports each one in turn to its best storage location, as determined by a fresh
+        :class:`~pycram.querying.storage_reasoner.StorageReasoner` built from the current plan
+        context.
+
+        :raises RuntimeError: if an object has usable storage candidates but transporting it
+            to all of them fails at runtime (see :meth:`_transport_object`).
+        """
         objects_on_surface = self._order_objects()
         storage_reasoner = StorageReasoner(self.plan.context)
 
@@ -88,6 +113,19 @@ class CleanSurfaceAction(ActionDescription):
     def _transport_object(
         self, obj: HasRootBody, storage_reasoner: StorageReasoner
     ) -> None:
+        """
+        Stores a single object using the reasoner's ranked storage candidates.
+
+        Queries ``storage_reasoner`` for usable storage results for ``obj``, and tries them
+        best-first via :meth:`_try_solution` until one succeeds. If the reasoner finds no
+        usable storage at all, logs a warning and leaves the object where it is (this is not
+        treated as an error). If usable candidates exist but every one of them fails at
+        runtime, raises ``RuntimeError``.
+
+        :param obj: The object to transport off the surface.
+        :param storage_reasoner: Reasoner used to find and rank candidate storage locations.
+        :raises RuntimeError: if all candidate solutions fail to be reached/placed.
+        """
         possible_solutions = storage_reasoner.select_usable_results(
             storage_object=obj, arm=self.arm
         )
@@ -107,6 +145,20 @@ class CleanSurfaceAction(ActionDescription):
             )
 
     def _try_solution(self, obj: HasRootBody, solution: StorageReasonerResult) -> bool:
+        """
+        Tries to transport ``obj`` to one candidate storage surface, attempting each of the
+        solution's candidate poses in order until one succeeds.
+
+        ``ConfigurationNotReached`` and ``BodyUnfetchable`` are treated as expected, recoverable
+        failures for a given pose and trigger trying the next pose. Any other exception is
+        logged (with traceback) and also treated as a soft failure, so a single bad pose does
+        not abort the whole cleaning run.
+
+        :param obj: The object to transport.
+        :param solution: A candidate storage result (surface + reachable poses) to try.
+        :return: ``True`` if the object was successfully transported to this surface, ``False``
+            if every pose for this surface failed.
+        """
         poses = solution.poses
         for pose in poses:
             transport_action = TransportAction(

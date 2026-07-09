@@ -400,7 +400,7 @@ class Cabinet(Furniture, HasCaseAsRootBody):
         """
         The storage environment that this cabinet infers for storages inside it.
 
-        E.g.: A Fridge has a supporting surface on top, but that is not actually cooled, only the shelf layers inside the fridge.
+        E.g.: A Fridge has a supporting surface on top, but that is not actually cooled. Only the shelf layers inside the fridge are.
         """
         return StorageEnvironments.NORMAL
 
@@ -602,8 +602,20 @@ class Wall(HasApertures):
 
 @dataclass(eq=False)
 class StorageObject(HasRootBody):
+    """
+    Abstract class for objects that should be automatically stored by a robot.
+    """
+
     @property
     def preferred_storage_environment(self) -> StorageEnvironments:
+        """
+        The preferred storage environment for this object.
+
+        Subclasses can override this to specify special storage requirements (e.g., cold storage for refrigerated items).
+        Defaults to normal room temperature.
+
+        :return: The preferred storage environment.
+        """
         return StorageEnvironments.NORMAL
 
 

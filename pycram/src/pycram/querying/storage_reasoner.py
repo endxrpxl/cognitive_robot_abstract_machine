@@ -1,3 +1,14 @@
+"""
+Reasoning about where to physically store an object in the world.
+
+This module scores candidate storage surfaces (e.g. shelves, fridge layers) for a given
+object based on environment preference, free space, reachability, and grouping with
+similar objects already stored there.
+
+Note: "storage" here means a physical object-placement location, unrelated to robokudo's
+MongoDB/CAS-backed "storage" I/O layer (``robokudo.io.storage``).
+"""
+
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
@@ -31,11 +42,34 @@ logger.setLevel(level=logging.DEBUG)
 
 @dataclass
 class StorageReasonerResult:
+    """
+    Outcome of scoring a single candidate storage surface for a single object.
+    """
+
     surface: HasSupportingSurface
+    """
+    The candidate storage surface this result is about.
+    """
+
     score: float
+    """
+    Higher is better. 0.0 means the surface should not be used.
+    """
+
     satisfied_constraints: List[str]
+    """
+    Names of the constraints that passed.
+    """
+
     violated_constraints: List[str]
+    """
+    Names of the constraints that failed.
+    """
+
     poses: List[Pose] = field(default=None)
+    """
+    Reachable candidate poses on the surface for placing the object, if any.
+    """
 
     def __repr__(self):
         result = f"surface={self.surface.name.name}, score={self.score}, satisfied_constraints={self.satisfied_constraints}, violated_constraints={self.violated_constraints}"
@@ -43,6 +77,10 @@ class StorageReasonerResult:
 
 
 class StorageReasonerConstraints(Enum):
+    """
+    Constraints checked by the StorageReasoner when scoring a storage surface for an object.
+    """
+
     STORAGE_ENVIRONMENT = "storage environment"
     FREE_SPACE = "free space"
     REACHABLE = "reachable"
@@ -77,8 +115,12 @@ def _filter_points_full_on_surface(
 
 @dataclass
 class StorageReasoner:
+    """
+    Finds and scores storage surfaces in the world for storing a given object.
+    """
 
     context: Context = field(repr=False)
+    """Plan execution context; provides the ``world`` this reasoner queries."""
 
     def __post_init__(self):
         self.world = self.context.world
@@ -95,6 +137,13 @@ class StorageReasoner:
     def reason_for_object(
         self, storage_object: StorageObject, arm: Optional[Arms] = None
     ) -> List[StorageReasonerResult]:
+        """
+        Scores every known storage surface for the given object.
+
+        :param storage_object: The object to find a storage location for.
+        :param arm: Arm to check reachability with, passed through to the reachability check.
+        :return: One :class:`StorageReasonerResult` per known storage surface.
+        """
 
         results: List[StorageReasonerResult] = []
 
@@ -109,6 +158,23 @@ class StorageReasoner:
         storage: HasSupportingSurface,
         arm: Optional[Arms] = None,
     ) -> StorageReasonerResult:
+        """
+        Checks a single storage surface against all :class:`StorageReasonerConstraints` for the given object.
+        The first three constraints are gates: failing one immediately returns a zero-score result with only that constraint listed as violated.
+        The last constraint only ever adds to the score.
+
+        1. ``STORAGE_ENVIRONMENT``: the surface's storage environment must equal the object's preferred storage environment.
+        2. ``FREE_SPACE``: at least one point sampled from the surface must fit the object's whole footprint.
+        3. ``REACHABLE``: at least one free-space point (up to 10 checked) must be reachable by
+           ``arm``. Each reachable point adds 0.1 to the score.
+        4. ``SIMILAR_OBJECTS``: objects already on the surface with an inheritance distance
+           <= 1 to ``storage_object`` add their count to the score.
+
+        :param storage_object: The object to check this surface for.
+        :param storage: The candidate storage surface.
+        :param arm: Arm to check reachability with.
+        :return: The calculated :class:`StorageReasonerResult` for this surface.
+        """
 
         satisfied_constraints = []
         score = 0.0
@@ -207,6 +273,13 @@ class StorageReasoner:
     def select_usable_results(
         self, storage_object: StorageObject, arm: Optional[Arms] = None
     ) -> List[StorageReasonerResult]:
+        """
+        Scores every known storage surface for the given object and keeps only the usable ones.
+
+        :param storage_object: The object to find a storage location for.
+        :param arm: Arm to check reachability with.
+        :return: Results with ``score > 0.0``, ordered best (highest score) first.
+        """
         result = variable(
             type_=StorageReasonerResult,
             domain=self.reason_for_object(storage_object, arm),
@@ -222,5 +295,12 @@ class StorageReasoner:
     def select_best_result(
         self, storage_object: StorageObject, arm: Optional[Arms] = None
     ) -> StorageReasonerResult | None:
+        """
+        Convenience wrapper around :meth:`select_usable_results` returning only the top result.
+
+        :param storage_object: The object to find a storage location for.
+        :param arm: Arm to check reachability with.
+        :return: The highest-scoring usable result, or ``None`` if no surface is usable.
+        """
         results = self.select_usable_results(storage_object, arm)
         return results[0] if results else None
