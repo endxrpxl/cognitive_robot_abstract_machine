@@ -196,7 +196,7 @@ class StorageReasoner:
 
         # free space
         unfiltered_positions = storage.sample_points_from_surface(
-            body_to_sample_for=storage_object,
+            body_to_sample_for=storage_object
         )
         positions = _filter_points_full_on_surface(
             points=unfiltered_positions, obj=storage_object, surface=storage

@@ -84,7 +84,6 @@ class CleanSurfaceAction(ActionDescription):
                 env_priority = {
                     StorageEnvironments.COLD: 0,
                     StorageEnvironments.NORMAL: 1,
-                    StorageEnvironments.WARM: 2,
                 }
 
                 return sorted(
