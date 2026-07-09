@@ -1,6 +1,6 @@
 import logging
 
-from pycram.robot_plans.actions.composite.cleaning import CleanTableAction
+from pycram.robot_plans.actions.composite.cleaning import CleanSurfaceAction
 from demos.ansgar_bt.helpers.object_helpers import (
     seed_semantic_annotations_on_surface,
     set_color,
@@ -92,6 +92,6 @@ for spawned_item in spawned_items:
 
 with main_execution_type:
     execute_single(
-        CleanTableAction(surface_to_clean=_table, arm=Arms.LEFT),
+        CleanSurfaceAction(surface_to_clean=_table, arm=Arms.LEFT),
         context=main_context,
     ).perform()

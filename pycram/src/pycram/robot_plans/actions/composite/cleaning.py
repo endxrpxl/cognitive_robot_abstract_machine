@@ -30,7 +30,7 @@ class PickUpStrategy(Enum):
 
 
 @dataclass
-class CleanTableAction(ActionDescription):
+class CleanSurfaceAction(ActionDescription):
     """
     Cleans the surface by transporting all objects that are currently on the surface to their best storage location based on the StorageReasoner.
     """
