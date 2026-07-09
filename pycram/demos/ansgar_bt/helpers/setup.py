@@ -5,6 +5,7 @@ from typing import Tuple
 import rclpy
 from rclpy.executors import SingleThreadedExecutor
 
+from ansgar_bt.demo_world import DemoEnvironment
 from pycram.datastructures.dataclasses import Context
 from pycram.motion_executor import simulated_robot, ExecutionEnvironment, real_robot
 from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
@@ -114,7 +115,7 @@ def _simulated_setup(
     rclpy_node = rclpy.create_node(node_name)
 
     hsrb_world = _build_hsrb_world()
-    env_world = KitchenEnvironment().get_world()
+    env_world = DemoEnvironment().get_world()
 
     env_world.merge_world_at_pose(
         hsrb_world,
@@ -135,7 +136,7 @@ def setup_context(
     *,
     simulated: bool = True,
     node_name: str = "pycram_node",
-    robot_pose: Pose = Pose.from_xyz_quaternion(pos_x=0.5, pos_y=0.2),
+    robot_pose: Pose = Pose(),
 ) -> Tuple[Context, ExecutionEnvironment]:
     """
     Sets up the context for either a simulated or real robot.

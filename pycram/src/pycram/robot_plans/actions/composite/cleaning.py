@@ -115,12 +115,12 @@ class CleanTableAction(ActionDescription):
 
             try:
                 self.add_subplan(execute_single(transport_action)).perform()
-                logger.info(
+                logger.debug(
                     f"Successfully transported {obj.name.name} to {solution.surface.name.name}"
                 )
                 return True
             except (ConfigurationNotReached, BodyUnfetchable) as e:
-                logger.warning(
+                logger.debug(
                     f"Pose failed for object {obj.name.name} on surface {solution.surface.name.name}: {e}. Trying next pose."
                 )
                 continue
@@ -130,7 +130,7 @@ class CleanTableAction(ActionDescription):
                 )
                 continue
 
-        logger.warning(
+        logger.debug(
             f"All poses for surface {solution.surface.name.name} failed at runtime for object {obj.name.name}. Trying next candidate."
         )
         return False

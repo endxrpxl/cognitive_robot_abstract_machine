@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional, Tuple
@@ -16,12 +17,16 @@ from pycram.locations.locations import CostmapLocation
 from semantic_digital_twin.reasoning.predicates import inheritance_path_length_
 from semantic_digital_twin.semantic_annotations.mixins import (
     HasSupportingSurface,
+    HasRootBody,
 )
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     StorageObject,
 )
 from semantic_digital_twin.spatial_types import Point3
 from semantic_digital_twin.spatial_types.spatial_types import Pose
+
+logger = logging.getLogger(__name__)
+logger.setLevel(level=logging.DEBUG)
 
 
 @dataclass
@@ -42,6 +47,32 @@ class StorageReasonerConstraints(Enum):
     FREE_SPACE = "free space"
     REACHABLE = "reachable"
     SIMILAR_OBJECTS = "similar objects"
+
+
+def _filter_points_full_on_surface(
+    points: List[Point3], obj: HasRootBody, surface: HasSupportingSurface
+) -> List[Point3]:
+    """
+    Filters the given points to only include those where the whole object would be on the surface if placed at that point.
+
+    :param points: List of points to filter
+    :param obj: Object to filter for
+    :param surface: Surface to filter on
+    :return: Filtered list of points
+    """
+    obj_min, obj_max = obj.min_max_points
+    surf_min, surf_max = surface.min_max_points
+
+    return [
+        point
+        for point in points
+        if (
+            surf_min.x <= point.x + obj_min.x <= surf_max.x
+            and surf_min.x <= point.x + obj_max.x <= surf_max.x
+            and surf_min.y <= point.y + obj_min.y <= surf_max.y
+            and surf_min.y <= point.y + obj_max.y <= surf_max.y
+        )
+    ]
 
 
 @dataclass
@@ -69,6 +100,7 @@ class StorageReasoner:
 
         for storage in self.storages:
             results.append(self._reason_storage(storage_object, storage, arm))
+        logger.debug(f"Reasoning results for {storage_object.name}: {results}")
         return results
 
     def _reason_storage(
@@ -81,6 +113,7 @@ class StorageReasoner:
         satisfied_constraints = []
         score = 0.0
 
+        # check environment
         if storage.storage_environment != storage_object.preferred_storage_environment:
             return StorageReasonerResult(
                 surface=storage,
@@ -96,9 +129,11 @@ class StorageReasoner:
         )
 
         # free space
-        positions = storage.sample_points_from_surface(
+        unfiltered_positions = storage.sample_points_from_surface(
             body_to_sample_for=storage_object,
-            amount=20,
+        )
+        positions = _filter_points_full_on_surface(
+            points=unfiltered_positions, obj=storage_object, surface=storage
         )
         if not positions:
             return StorageReasonerResult(
@@ -108,6 +143,7 @@ class StorageReasoner:
                 violated_constraints=[StorageReasonerConstraints.FREE_SPACE.value],
             )
         satisfied_constraints.append(StorageReasonerConstraints.FREE_SPACE.value)
+
         # check reachable
         poses: List[Pose] = []
         for position in positions:
@@ -139,6 +175,7 @@ class StorageReasoner:
 
         score += len(poses) * 0.1
         satisfied_constraints.append(StorageReasonerConstraints.REACHABLE.value)
+
         # check similar objects
         object_on_surface = variable(
             StorageObject,
