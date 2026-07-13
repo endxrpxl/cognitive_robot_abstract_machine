@@ -2,17 +2,11 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from enum import Enum, auto
 from typing import Tuple
 
 import numpy as np
 import trimesh
-from krrood.entity_query_language.factories import variable_from, entity, variable, an
-from polytope import bounding_box
-from probabilistic_model.distributions.gaussian import GaussianDistribution
-from random_events.product_algebra import Event
-from random_events.set import Set
-from random_events.variable import Symbolic
-from semantic_digital_twin.reasoning.predicates import is_supported_by
 from typing_extensions import (
     TYPE_CHECKING,
     List,
@@ -22,7 +16,9 @@ from typing_extensions import (
     Type,
 )
 
+from krrood.entity_query_language.factories import variable_from, entity, variable, an
 from krrood.ormatic.utils import classproperty
+from probabilistic_model.distributions.gaussian import GaussianDistribution
 from probabilistic_model.distributions.helper import make_dirac
 from probabilistic_model.probabilistic_circuit.rx.helper import (
     uniform_measure_of_event,
@@ -33,11 +29,15 @@ from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     SumUnit,
     leaf,
 )
+from random_events.product_algebra import Event
+from random_events.set import Set
+from random_events.variable import Symbolic
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.exceptions import (
     MismatchingWorld,
 )
+from semantic_digital_twin.reasoning.predicates import is_supported_by
 from semantic_digital_twin.spatial_types import (
     Point3,
     HomogeneousTransformationMatrix,
@@ -595,6 +595,11 @@ class HasHandle(HasRootBody, ABC):
         self.handle = handle
 
 
+class StorageEnvironments(Enum):
+    COLD = auto()
+    NORMAL = auto()
+
+
 @dataclass(eq=False)
 class HasStorageSpace(HasRootBody, ABC):
     """
@@ -606,6 +611,23 @@ class HasStorageSpace(HasRootBody, ABC):
     """
     The objects stored in the semantic annotation.
     """
+
+    use_as_storage: bool = field(default=False)
+    """
+    Whether the semantic annotation should be used as a storage space for transporting actions.
+    """
+
+    @classproperty
+    def storage_environment(self) -> StorageEnvironments:
+        """
+        The preferred storage environment for objects stored in this semantic annotation.
+
+        This class-level property indicates environmental constraints for objects placed inside or stored by this
+        annotation.
+
+        :return: A :class:`StorageEnvironments` enum value describing the storage requirements for this annotation.
+        """
+        return StorageEnvironments.NORMAL
 
     @synchronized_attribute_modification
     def add_object(self, object: HasRootBody):
@@ -749,9 +771,13 @@ class HasSupportingSurface(HasStorageSpace, ABC):
                 supporting_body=self.root,
             )
         )
-        objects = an(entity(
-            semantic_annotation := variable(HasRootBody, domain=self._world.semantic_annotations)
-        ).where(semantic_annotation.root == body)).evaluate()
+        objects = an(
+            entity(
+                semantic_annotation := variable(
+                    HasRootBody, domain=self._world.semantic_annotations
+                )
+            ).where(semantic_annotation.root == body)
+        ).evaluate()
         for obj in objects:
             if obj in self.objects:
                 continue
@@ -1028,3 +1054,10 @@ class HasCaseAsRootBody(HasSupportingSurface, ABC):
         container_event = outer_box.as_composite_set() - inner_box.as_composite_set()
 
         return container_event
+
+
+@dataclass(eq=False)
+class IsSpillable:
+    """
+    A mixin class for semantic annotations that can spill and should be held upright.
+    """

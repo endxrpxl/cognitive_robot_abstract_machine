@@ -1,19 +1,40 @@
-import math
-from typing import List, Union, Optional
-from krrood.entity_query_language.factories import variable_from, entity, flat_variable, in_, the, contains, variable, \
-    an, or_, and_, distinct
-from krrood.entity_query_language.query.query import Entity
-from krrood.entity_query_language.predicate import symbolic_function, length
-from krrood.utils import inheritance_path_length, recursive_subclasses
+from typing import List, Optional
 
+from krrood.entity_query_language.factories import (
+    variable_from,
+    entity,
+    contains,
+    variable,
+    an,
+    and_,
+    exists,
+    not_,
+    set_of,
+    type_,
+    average,
+    flat_variable,
+    count,
+)
+from krrood.entity_query_language.predicate import symbolic_function, length
+from krrood.entity_query_language.query.query import Entity
+from krrood.utils import recursive_subclasses
 from semantic_digital_twin.reasoning.predicates import (
     is_supported_by,
-    is_supporting, compute_euclidean_planar_distance,
+    is_supporting,
+    compute_euclidean_planar_distance,
+    inheritance_path_length_,
 )
-from semantic_digital_twin.semantic_annotations.mixins import HasSupportingSurface, IsPerceivable, HasRootBody
+from semantic_digital_twin.semantic_annotations.mixins import (
+    HasSupportingSurface,
+    IsPerceivable,
+    HasRootBody,
+)
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    StorageObject,
+)
+from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Color
-
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     SemanticAnnotation,
@@ -30,12 +51,31 @@ def semantic_annotations_on_surfaces(
     return: List of SemanticAnnotations that are supported by the given supporting_surfaces.
     """
     objects = []
-    with world.modify_world():
-        for surface in supporting_surfaces:
-            surface.infer_objects_on_surface()
-            objects.extend(surface.objects)
+    for surface in supporting_surfaces:
+        objects += semantic_annotations_on_surface(surface, world)
 
     return objects
+
+
+def semantic_annotations_on_surface(
+    supporting_surface: HasSupportingSurface, world: Optional[World] = None
+) -> List[HasRootBody]:
+    """
+    Queries a list of Semantic annotations that are on top of the given annotation (ex. Tables).
+    param: supporting_surface: SemanticAnnotation that is supporting other annotations.
+    :param world: World object that contains the supporting_surfaces.
+    return: List of SemanticAnnotations that are supported by the given supporting_surface.
+    """
+    if world is None:
+        world = supporting_surface._world
+
+    objects = []
+    with world.modify_world():
+        supporting_surface.infer_objects_on_surface()
+        objects.extend(supporting_surface.objects)
+
+    return objects
+
 
 def get_next_object_using_planar_distance(
     main_body: Body,
@@ -56,9 +96,9 @@ def get_next_object_using_planar_distance(
     """
     # if supporting_surface is None:
     #     return []
-    supported_semantic_annotations = variable_from(semantic_annotations_on_surfaces(
-        [supporting_surface], main_body._world
-    ))
+    supported_semantic_annotations = variable_from(
+        semantic_annotations_on_surfaces([supporting_surface], main_body._world)
+    )
     return entity(supported_semantic_annotations).ordered_by(
         compute_euclidean_planar_distance(
             body1=supported_semantic_annotations.bodies[0],
@@ -88,43 +128,41 @@ def goal_surface_of_object(
     """
     if not supporting_surfaces:
         return None
-
-    # Find the surface that is not supporting anything
-    non_supporting_table = None
-    for supporting_surface in supporting_surfaces:
-        if not is_supporting(supporting_surface.bodies[0]):
-            non_supporting_table = supporting_surface
-            break
-
-    # Query annotations on the surfaces of the tables
-    objects = semantic_annotations_on_surfaces(
-        supporting_surfaces, object_of_interest._world
+    supporting_surface = variable(HasSupportingSurface, supporting_surfaces)
+    supporting_body = supporting_surface.bodies[0]
+    non_supporting_table = entity(supporting_surface).where(
+        exists(supporting_surface, not_(is_supporting(supporting_body)))
     )
 
-    best_distance = math.inf
-    most_similar = None
+    # Query annotations on the surfaces of the tables
+    obj = variable(
+        SemanticAnnotation,
+        semantic_annotations_on_surfaces(
+            supporting_surfaces, object_of_interest._world
+        ),
+    )
 
-    # Iterate over each object to find the most similar based on inheritance path length
-    for obj in objects:
-        for cls in type(obj).__mro__:
-            dist = inheritance_path_length(type(object_of_interest), cls)
-            if dist is None:
-                continue
-            if dist < best_distance:
-                best_distance = dist
-                most_similar = obj
-            break  # Once a match is found, no need to check further classes for this object
+    inheritance_distance = lambda obj_: inheritance_path_length_(
+        type(object_of_interest), type_(obj_)
+    )
 
-    # Apply threshold to determine if the match is acceptable
-    if best_distance > threshold or most_similar is None:
-        return non_supporting_table
+    query = (
+        set_of(obj, supporting_surface)
+        .where(
+            (distance := inheritance_distance(obj)) <= threshold,
+            is_supported_by(obj.bodies[0], supporting_body),
+        )
+        .ordered_by(distance)
+    )
+    return next(
+        query[supporting_surface].evaluate(),
+        next(non_supporting_table.evaluate(), None),
+    )
 
-    # Find the table supporting the most similar object
-    for supporting_surface in supporting_surfaces:
-        if is_supported_by(most_similar.bodies[0], supporting_surface.bodies[0]):
-            return supporting_surface
 
-def filter_annotations_by_color(color: Color, objects: list[SemanticAnnotation]) -> Entity[SemanticAnnotation]:
+def filter_annotations_by_color(
+    color: Color, objects: list[SemanticAnnotation]
+) -> Entity[SemanticAnnotation]:
     """
     Queries and retrieves a list of annotations from another one that match
     the specified color based on their visual properties.
@@ -142,17 +180,12 @@ def filter_annotations_by_color(color: Color, objects: list[SemanticAnnotation])
     body = object_var.bodies[0]
 
     matching_body = entity(body).where(
-        or_(
-            and_(
-                body.visual != None,
-                length(body.visual.shapes) > 0,
-                body.visual.shapes[0].color == color,
-            ),
-            and_(body.collision != None,
-            length(body.collision.shapes) > 0,
-            body.collision.shapes[0].color == color,
+        and_(
+            body.visual != None,
+            length(body.visual.shapes) > 0,
+            body.visual.shapes[0].color == color,
         )
-    ))
+    )
     semantic_annotation = variable(HasRootBody, world.semantic_annotations)
     return entity(semantic_annotation).where(semantic_annotation.root == matching_body)
 
@@ -166,11 +199,17 @@ def annotation_class_by_label(label: str) -> Optional[type]:
     :return: The matching class (e.g., Bowl) or None if no match is found.
     """
     semantic_class = variable_from(recursive_subclasses(IsPerceivable))
-    matching_class = an(entity(semantic_class).where(contains(label.lower(), semantic_class.__name__.lower())))
+    matching_class = an(
+        entity(semantic_class).where(
+            contains(label.lower(), semantic_class.__name__.lower())
+        )
+    )
     return next(matching_class.evaluate(), None)
 
 
-def sort_annotations_by_volume(annotations: List[HasRootBody], order: Optional[bool]=True) -> List[HasRootBody]:
+def sort_annotations_by_volume(
+    annotations: List[HasRootBody], order: Optional[bool] = True
+) -> List[HasRootBody]:
     """
     Sorts a list of SemanticAnnotations by volume in descending order (largest to smallest).
     Volume is calculated by multiplying the scale dimensions (x * y * z) of the object's shape.
@@ -188,8 +227,12 @@ def sort_annotations_by_volume(annotations: List[HasRootBody], order: Optional[b
 
         # Get shapes from collision if available, otherwise from visual
         if body.collision is not None:
-            return body.collision.scale.x * body.collision.scale.y * body.collision.scale.z
+            return (
+                body.collision.scale.x * body.collision.scale.y * body.collision.scale.z
+            )
         else:
             return 0.0
 
-    return entity(annotaion_var).ordered_by(get_volume(annotaion_var), descending=not order)
+    return entity(annotaion_var).ordered_by(
+        get_volume(annotaion_var), descending=not order
+    )

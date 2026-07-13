@@ -1,10 +1,12 @@
 from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass
+from typing import Optional, Any
 
 import numpy as np
 import math
 import trimesh.boolean
+from krrood.utils import inheritance_path_length
 from trimesh.collision import CollisionManager
 
 from krrood.entity_query_language.predicate import (
@@ -35,7 +37,7 @@ from semantic_digital_twin.world_description.geometry import BoundingBox
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     Region,
-    KinematicStructureEntity,
+    KinematicStructureEntity, SemanticAnnotation,
 )
 
 if TYPE_CHECKING:
@@ -203,7 +205,9 @@ def reachable(pose: HomogeneousTransformationMatrix, root: Body, tip: Body) -> b
 
 
 @symbolic_function
-def compute_euclidean_planar_distance(body1: Body, body2: Body, ignore_dimension: Vector3):
+def compute_euclidean_planar_distance(
+    body1: Body, body2: Body, ignore_dimension: Vector3
+):
     """
     Computes the Euclidean distance between two bodies in 2D space, ignoring a specific dimension
     specified by the user. The ignored dimension is set to zero before the distance calculation. This
@@ -234,10 +238,7 @@ def compute_euclidean_planar_distance(body1: Body, body2: Body, ignore_dimension
         body1_position.z = 0.0
         body2_position.z = 0.0
 
-
-    return body1_position.euclidean_distance(
-        body2_position
-    )
+    return body1_position.euclidean_distance(body2_position)
 
 
 @symbolic_function
@@ -253,6 +254,8 @@ def is_supported_by(
     If the intersection is higher than this value, the check returns False due to unhandled clipping.
     :return: True if the second object is supported by the first object, False otherwise
     """
+    if supported_body.id == supporting_body.id:
+        return False
     if Below(
         supported_body.center_of_mass,
         supporting_body.center_of_mass,
@@ -281,6 +284,7 @@ def is_supported_by(
     size = sum([si.upper - si.lower for si in z_intersection.simple_sets])
     return size < max_intersection_height
 
+
 @symbolic_function
 def is_supporting(supporting_body: Body, max_intersection_height: float = 0.1) -> bool:
     """
@@ -305,6 +309,20 @@ def is_supporting(supporting_body: Body, max_intersection_height: float = 0.1) -
             return True
 
     return False
+
+
+
+
+
+@symbolic_function
+def inheritance_path_length_(child_class: Type, parent_class: Type) -> Optional[int]:
+    result = None
+    for t in parent_class.__mro__:
+        result = inheritance_path_length(child_class, t)
+        if result is not None:
+            break
+    return result if result is not None else math.inf
+
 
 
 @symbolic_function

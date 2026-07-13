@@ -4,12 +4,20 @@ from abc import ABC
 from dataclasses import dataclass, field
 from typing import Iterable, Optional, Self, Tuple
 
-from random_events.interval import closed
-from random_events.product_algebra import SimpleEvent
 from typing_extensions import List, Type
 
 from krrood.ormatic.utils import classproperty
 from krrood.symbolic_math import symbolic_math
+from random_events.interval import closed
+from random_events.product_algebra import SimpleEvent
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.datastructures.variables import SpatialVariables
+from semantic_digital_twin.exceptions import (
+    InvalidPlaneDimensions,
+    InvalidHingeActiveAxis,
+    MissingSemanticAnnotationError,
+)
+from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.semantic_annotations.mixins import (
     HasSupportingSurface,
     HasRootRegion,
@@ -23,15 +31,9 @@ from semantic_digital_twin.semantic_annotations.mixins import (
     IsPerceivable,
     HasRootBody,
     HasStorageSpace,
+    IsSpillable,
+    StorageEnvironments,
 )
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.datastructures.variables import SpatialVariables
-from semantic_digital_twin.exceptions import (
-    InvalidPlaneDimensions,
-    InvalidHingeActiveAxis,
-    MissingSemanticAnnotationError,
-)
-from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.spatial_types import (
     Point3,
     HomogeneousTransformationMatrix,
@@ -56,6 +58,9 @@ from semantic_digital_twin.world_description.world_entity import (
     Body,
     Region,
     Connection,
+)
+from semantic_digital_twin.world_description.world_modification import (
+    synchronized_attribute_modification,
 )
 
 
@@ -130,6 +135,7 @@ class Handle(HasRootBody):
                 SpatialVariables.z.value: z_interval,
             }
         )
+
 
 @dataclass(eq=False)
 class Dishwasher(HasCaseAsRootBody, HasDoors, HasDrawers):
@@ -388,23 +394,64 @@ class CounterTop(Furniture, HasSupportingSurface):
 
 @dataclass(eq=False)
 class Cabinet(Furniture, HasCaseAsRootBody):
+
+    @classproperty
+    def infers_storage_environment(self) -> StorageEnvironments:
+        """
+        The storage environment that this cabinet infers for storages inside it.
+
+        E.g.: A Fridge has a supporting surface on top, but that is not actually cooled. Only the shelf layers inside the fridge are.
+        """
+        return StorageEnvironments.NORMAL
+
     @classproperty
     def hole_direction(self) -> Vector3:
         return Vector3.NEGATIVE_X()
 
 
 @dataclass(eq=False)
-class Fridge(Cabinet, HasDoors, HasDrawers): ...
+class CabinetWithLayers(Cabinet, ABC):
+    """
+    A cabinet with shelf layers, that are inferred from the world.
+    """
+
+    _shelf_layers: List[ShelfLayer] = field(default_factory=list)
+
+    @property
+    def shelf_layers(self) -> List[ShelfLayer]:
+        """
+        The shelf layers inside the cabinet.
+        """
+        if not self._shelf_layers:
+            self.add_shelf_layers()
+        return self._shelf_layers
+
+    def add_shelf_layers(self) -> None:
+        shelf_layers = self._world.get_semantic_annotations_by_type(ShelfLayer)
+        for shelf_layer in shelf_layers:
+            if InsideOf(shelf_layer.root, self.root).compute_containment_ratio() == 1:
+                self._shelf_layers.append(shelf_layer)
+                shelf_layer.storage_environment = self.infers_storage_environment
+
+
+@dataclass(eq=False)
+class Fridge(CabinetWithLayers, HasDoors, HasDrawers):
+
+    @classproperty
+    def infers_storage_environment(self) -> StorageEnvironments:
+        return StorageEnvironments.COLD
+
 
 @dataclass(eq=False)
 class Oven(HasRootBody): ...
+
 
 @dataclass(eq=False)
 class Dresser(Cabinet, HasDrawers, HasDoors): ...
 
 
 @dataclass(eq=False)
-class Cupboard(Cabinet, HasDoors): ...
+class Cupboard(CabinetWithLayers, HasDoors): ...
 
 
 @dataclass(eq=False)
@@ -554,7 +601,26 @@ class Wall(HasApertures):
 
 
 @dataclass(eq=False)
-class Bottle(HasRootBody):
+class StorageObject(HasRootBody):
+    """
+    Abstract class for objects that should be automatically stored by a robot.
+    """
+
+    @property
+    def preferred_storage_environment(self) -> StorageEnvironments:
+        """
+        The preferred storage environment for this object.
+
+        Subclasses can override this to specify special storage requirements (e.g., cold storage for refrigerated items).
+        Defaults to normal room temperature.
+
+        :return: The preferred storage environment.
+        """
+        return StorageEnvironments.NORMAL
+
+
+@dataclass(eq=False)
+class Bottle(StorageObject, IsSpillable):
     """
     Abstract class for bottles.
     """
@@ -586,7 +652,7 @@ class MustardBottle(Bottle):
 
 
 @dataclass(eq=False)
-class DrinkingContainer(HasRootBody): ...
+class DrinkingContainer(HasRootBody, IsSpillable): ...
 
 
 @dataclass(eq=False)
@@ -655,7 +721,7 @@ class Bowl(HasSupportingSurface, IsPerceivable):
 
 # Food Items
 @dataclass(eq=False)
-class Food(HasRootBody):
+class Food(StorageObject):
     """
     A Group class for Food.
     """
@@ -739,12 +805,14 @@ class Cereal(Food, IsPerceivable):
 
 
 @dataclass(eq=False)
-class Milk(Food, IsPerceivable):
+class Milk(Food, IsPerceivable, IsSpillable):
     """
     A container of milk.
     """
 
-    ...
+    @property
+    def preferred_storage_environment(self) -> StorageEnvironments:
+        return StorageEnvironments.COLD
 
 
 @dataclass(eq=False)
@@ -761,8 +829,6 @@ class Produce(Food):
     """
     In American English, produce generally refers to fresh fruits and vegetables intended to be eaten by humans.
     """
-
-    pass
 
 
 @dataclass(eq=False)
@@ -826,6 +892,7 @@ class Salt(Food):
     """
     A pack or container of salt (e.g., salt shaker or salt can).
     """
+
 
 @dataclass(eq=False)
 class CoffeeTable(Table):
@@ -945,7 +1012,7 @@ class WallPanel(HasRootBody):
 
 
 @dataclass(eq=False)
-class Potato(Produce): ...
+class Potato(Vegetable): ...
 
 
 @dataclass(eq=False)

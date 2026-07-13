@@ -22,6 +22,7 @@ from semantic_digital_twin.exceptions import (
 )
 from semantic_digital_twin.semantic_annotations.mixins import (
     HasCaseAsRootBody,
+    StorageEnvironments,
 )
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Handle,
@@ -39,6 +40,8 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Cabinet,
     Milk,
     Cereal,
+    Cupboard,
+    ShelfLayer,
 )
 from semantic_digital_twin.spatial_types import (
     Vector3,
@@ -997,6 +1000,51 @@ class TestFactories(unittest.TestCase):
             double_door.calculate_left_right_door_from_view_point(view_point_back),
             (door_right, door_left),
         )
+
+    def test_shelves_inside_cabinet_and_inferred_environment(self):
+        world = World()
+        root = Body(name=PrefixedName("root"))
+        with world.modify_world():
+            world.add_body(root)
+        with world.modify_world():
+            fridge = Fridge.create_with_new_body_in_world(
+                world=world,
+                name=PrefixedName("fridge"),
+                world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=1, y=3, z=0
+                ),
+                scale=Scale(1, 1, 2),
+            )
+
+            fridge_layer = ShelfLayer.create_with_new_body_in_world(
+                world=world,
+                name=PrefixedName("fridge_layer"),
+                world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=1, y=3, z=0
+                ),
+                scale=Scale(0.9, 0.9, 0.02),
+            )
+
+            cupboard = Cupboard.create_with_new_body_in_world(
+                world=world,
+                name=PrefixedName("cupboard"),
+                world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=0, y=0, z=0
+                ),
+                scale=Scale(1, 1, 2),
+            )
+
+            cupboard_layer = ShelfLayer.create_with_new_body_in_world(
+                world=world,
+                name=PrefixedName("cupboard_layer"),
+                world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=0, y=0, z=0
+                ),
+                scale=Scale(0.95, 0.95, 0.02),
+            )
+        self.assertIn(fridge_layer, fridge.shelf_layers)
+        self.assertIn(cupboard_layer, cupboard.shelf_layers)
+        self.assertEqual(StorageEnvironments.COLD, fridge_layer.storage_environment)
 
 
 if __name__ == "__main__":
